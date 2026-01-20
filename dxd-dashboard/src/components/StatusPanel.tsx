@@ -5,6 +5,7 @@ interface StatusPanelProps {
   drones: Drone[];
   alert: Alert | null;
   onDispatch: (droneId: string) => void;
+  dispatchStatus: 'idle' | 'en_route' | 'on_scene';
 }
 
 // Battery indicator component
@@ -48,7 +49,7 @@ function StatusBadge({ status }: { status: Drone['status'] }) {
   );
 }
 
-export default function StatusPanel({ drones, alert, onDispatch }: StatusPanelProps) {
+export default function StatusPanel({ drones, alert, onDispatch, dispatchStatus }: StatusPanelProps) {
   // Find nearest available drone to alert
   const findNearestDrone = (): Drone | null => {
     if (!alert) return null;
@@ -130,9 +131,14 @@ export default function StatusPanel({ drones, alert, onDispatch }: StatusPanelPr
               </button>
             )}
 
-            {drones.some(d => d.status === 'responding') && (
-              <div className="mt-3 text-center text-green-400 text-sm font-medium">
+            {dispatchStatus === 'en_route' && (
+              <div className="mt-3 text-center text-yellow-400 text-sm font-medium">
                 Drone en route to location
+              </div>
+            )}
+            {dispatchStatus === 'on_scene' && (
+              <div className="mt-3 text-center text-green-400 text-sm font-medium">
+                Drone on scene - investigating
               </div>
             )}
           </div>
