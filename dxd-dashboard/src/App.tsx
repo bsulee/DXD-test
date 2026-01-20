@@ -4,7 +4,7 @@ import StatusPanel from './components/StatusPanel';
 import ActivityLog from './components/ActivityLog';
 import MetricsBar from './components/MetricsBar';
 import type { Drone, Alert, LogEntry } from './data/mockData';
-import { initialDrones, scriptedAlert } from './data/mockData';
+import { initialDrones, scriptedAlert, externalAlert, isInsideGeofence } from './data/mockData';
 
 interface Metrics {
   activeDrones: number;
@@ -59,16 +59,34 @@ function App() {
     addLogEntry('system', `System online - ${activeDrones} drones active`);
   }, [addLogEntry]);
 
-  // Show alert after 5 seconds
+  // Show first alert after 5 seconds (internal)
   useEffect(() => {
     const alertTimer = setTimeout(() => {
       setAlert({ ...scriptedAlert, timestamp: new Date() });
       addLogEntry('alert', '⚠ ALERT: Perimeter breach detected - Eastern sector');
-      // Increment alerts today
       setMetrics(prev => ({ ...prev, alertsToday: prev.alertsToday + 1 }));
     }, 5000);
 
     return () => clearTimeout(alertTimer);
+  }, [addLogEntry]);
+
+  // Show external alert after 15 seconds
+  useEffect(() => {
+    const externalAlertTimer = setTimeout(() => {
+      setAlert({ ...externalAlert, timestamp: new Date() });
+      addLogEntry('alert', '⚠ EXTERNAL THREAT: Unauthorized vehicle outside perimeter');
+      setMetrics(prev => ({ ...prev, alertsToday: prev.alertsToday + 1 }));
+      // Reset responding state for new alert
+      setRespondingDroneId(null);
+      setDroneArrived(false);
+      setDispatchStatus('idle');
+      // Reset any responding drones back to patrolling
+      setDrones(prev => prev.map(d =>
+        d.status === 'responding' ? { ...d, status: 'patrolling' as const, speed: 12 } : d
+      ));
+    }, 15000);
+
+    return () => clearTimeout(externalAlertTimer);
   }, [addLogEntry]);
 
   // Patrol logging every 10 seconds
@@ -213,12 +231,19 @@ function App() {
   // Handle dispatch
   const handleDispatch = (droneId: string) => {
     const drone = drones.find(d => d.id === droneId);
+    const isExternal = alert ? !isInsideGeofence(alert.lat, alert.lng) : false;
+
     if (drone) {
-      addLogEntry('dispatch', `${drone.id} dispatched to alert location`);
+      if (isExternal) {
+        addLogEntry('dispatch', `⚠ ${drone.id} responding to external perimeter alert`);
+      } else {
+        addLogEntry('dispatch', `${drone.id} dispatched to alert location`);
+      }
     }
 
     setRespondingDroneId(droneId);
     setDispatchStatus('en_route');
+    setDroneArrived(false); // Reset for new dispatch
     dispatchStartTime.current = Date.now(); // Record start time for response calculation
 
     setDrones(prevDrones =>
