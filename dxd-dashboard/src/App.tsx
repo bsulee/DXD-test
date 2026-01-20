@@ -2,8 +2,18 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import DroneMap from './components/DroneMap';
 import StatusPanel from './components/StatusPanel';
 import ActivityLog from './components/ActivityLog';
+import MetricsBar from './components/MetricsBar';
 import type { Drone, Alert, LogEntry } from './data/mockData';
 import { initialDrones, scriptedAlert } from './data/mockData';
+
+interface Metrics {
+  activeDrones: number;
+  totalDrones: number;
+  avgResponseTime: number;
+  responseTimes: number[];
+  alertsToday: number;
+  coveragePercent: number;
+}
 
 function App() {
   // State for drones and alert
@@ -12,6 +22,17 @@ function App() {
   const [respondingDroneId, setRespondingDroneId] = useState<string | null>(null);
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
   const [droneArrived, setDroneArrived] = useState(false);
+  const [dispatchStatus, setDispatchStatus] = useState<'idle' | 'en_route' | 'on_scene'>('idle');
+  const [metrics, setMetrics] = useState<Metrics>({
+    activeDrones: initialDrones.filter(d => d.status !== 'idle').length,
+    totalDrones: initialDrones.length,
+    avgResponseTime: 0,
+    responseTimes: [],
+    alertsToday: Math.floor(Math.random() * 3) + 4, // Start with random 4-6
+    coveragePercent: 98,
+  });
+  const [responseTimeFlash, setResponseTimeFlash] = useState(false);
+  const dispatchStartTime = useRef<number | null>(null);
 
   // Track initial positions for patrol patterns
   const initialPositions = useRef(
@@ -43,6 +64,8 @@ function App() {
     const alertTimer = setTimeout(() => {
       setAlert({ ...scriptedAlert, timestamp: new Date() });
       addLogEntry('alert', '⚠ ALERT: Perimeter breach detected - Eastern sector');
+      // Increment alerts today
+      setMetrics(prev => ({ ...prev, alertsToday: prev.alertsToday + 1 }));
     }, 5000);
 
     return () => clearTimeout(alertTimer);
@@ -87,9 +110,32 @@ function App() {
               // Log arrival only once
               if (!droneArrived) {
                 setDroneArrived(true);
+                setDispatchStatus('on_scene');
                 setTimeout(() => {
                   addLogEntry('arrival', `${drone.id} on scene - investigating`);
                 }, 0);
+                // Clear status after 2 seconds
+                setTimeout(() => {
+                  setDispatchStatus('idle');
+                }, 2000);
+
+                // Calculate response time
+                if (dispatchStartTime.current) {
+                  const responseTime = Math.round((Date.now() - dispatchStartTime.current) / 1000);
+                  setMetrics(prev => {
+                    const newTimes = [...prev.responseTimes, responseTime];
+                    const avgTime = Math.round(newTimes.reduce((a, b) => a + b, 0) / newTimes.length);
+                    return {
+                      ...prev,
+                      responseTimes: newTimes,
+                      avgResponseTime: avgTime,
+                    };
+                  });
+                  // Flash the response time
+                  setResponseTimeFlash(true);
+                  setTimeout(() => setResponseTimeFlash(false), 1000);
+                  dispatchStartTime.current = null;
+                }
               }
               return {
                 ...drone,
@@ -172,6 +218,8 @@ function App() {
     }
 
     setRespondingDroneId(droneId);
+    setDispatchStatus('en_route');
+    dispatchStartTime.current = Date.now(); // Record start time for response calculation
 
     setDrones(prevDrones =>
       prevDrones.map(drone => {
@@ -188,9 +236,14 @@ function App() {
   };
 
   return (
-    <div className="h-screen w-screen flex bg-[#0a0a12] overflow-hidden">
-      {/* Map Section - Takes up most of the screen */}
-      <div className="flex-1 relative">
+    <div className="h-screen w-screen flex flex-col bg-[#0a0a12] overflow-hidden">
+      {/* Metrics Bar - Top */}
+      <MetricsBar metrics={metrics} responseTimeFlash={responseTimeFlash} />
+
+      {/* Main Content */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Map Section - Takes up most of the screen */}
+        <div className="flex-1 relative">
         {/* Top bar */}
         <div className="absolute top-0 left-0 right-0 z-[1000] bg-gradient-to-b from-[#0a0a12] to-transparent p-4 pointer-events-none">
           <div className="flex items-center justify-between">
@@ -248,9 +301,11 @@ function App() {
             drones={drones}
             alert={alert}
             onDispatch={handleDispatch}
+            dispatchStatus={dispatchStatus}
           />
         </div>
         <ActivityLog entries={logEntries} />
+        </div>
       </div>
     </div>
   );
