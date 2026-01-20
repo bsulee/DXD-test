@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import DroneMap from './components/DroneMap';
 import StatusPanel from './components/StatusPanel';
-import type { Drone, Alert } from './data/mockData';
+import ActivityLog from './components/ActivityLog';
+import type { Drone, Alert, LogEntry } from './data/mockData';
 import { initialDrones, scriptedAlert } from './data/mockData';
 
 function App() {
@@ -9,6 +10,8 @@ function App() {
   const [drones, setDrones] = useState<Drone[]>(initialDrones);
   const [alert, setAlert] = useState<Alert | null>(null);
   const [respondingDroneId, setRespondingDroneId] = useState<string | null>(null);
+  const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
+  const [droneArrived, setDroneArrived] = useState(false);
 
   // Track initial positions for patrol patterns
   const initialPositions = useRef(
@@ -18,14 +21,49 @@ function App() {
     }, {} as Record<string, { lat: number; lng: number }>)
   );
 
+  // Add log entry helper
+  const addLogEntry = useCallback((type: LogEntry['type'], message: string) => {
+    const entry: LogEntry = {
+      id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      timestamp: new Date(),
+      type,
+      message,
+    };
+    setLogEntries(prev => [...prev, entry]);
+  }, []);
+
+  // System online log on mount
+  useEffect(() => {
+    const activeDrones = initialDrones.filter(d => d.status !== 'idle').length;
+    addLogEntry('system', `System online - ${activeDrones} drones active`);
+  }, [addLogEntry]);
+
   // Show alert after 5 seconds
   useEffect(() => {
     const alertTimer = setTimeout(() => {
       setAlert({ ...scriptedAlert, timestamp: new Date() });
+      addLogEntry('alert', '⚠ ALERT: Perimeter breach detected - Eastern sector');
     }, 5000);
 
     return () => clearTimeout(alertTimer);
-  }, []);
+  }, [addLogEntry]);
+
+  // Patrol logging every 10 seconds
+  useEffect(() => {
+    const patrolLogInterval = setInterval(() => {
+      setDrones(currentDrones => {
+        const patrollingDrones = currentDrones.filter(d => d.status === 'patrolling');
+        if (patrollingDrones.length > 0) {
+          // Pick a random patrolling drone to log
+          const drone = patrollingDrones[Math.floor(Math.random() * patrollingDrones.length)];
+          addLogEntry('patrol', `${drone.id} patrolling - ${drone.sector}`);
+        }
+        return currentDrones;
+      });
+    }, 10000);
+
+    return () => clearInterval(patrolLogInterval);
+  }, [addLogEntry]);
 
   // Drone movement simulation
   useEffect(() => {
@@ -46,6 +84,13 @@ function App() {
 
             // If arrived at target
             if (distance < 0.0002) {
+              // Log arrival only once
+              if (!droneArrived) {
+                setDroneArrived(true);
+                setTimeout(() => {
+                  addLogEntry('arrival', `${drone.id} on scene - investigating`);
+                }, 0);
+              }
               return {
                 ...drone,
                 lat: targetLat,
@@ -117,10 +162,15 @@ function App() {
     }, 50); // 20fps for smooth movement
 
     return () => clearInterval(interval);
-  }, [alert]);
+  }, [alert, droneArrived, addLogEntry]);
 
   // Handle dispatch
   const handleDispatch = (droneId: string) => {
+    const drone = drones.find(d => d.id === droneId);
+    if (drone) {
+      addLogEntry('dispatch', `${drone.id} dispatched to alert location`);
+    }
+
     setRespondingDroneId(droneId);
 
     setDrones(prevDrones =>
@@ -191,13 +241,16 @@ function App() {
         />
       </div>
 
-      {/* Status Panel - Right side */}
-      <div className="w-80 h-full">
-        <StatusPanel
-          drones={drones}
-          alert={alert}
-          onDispatch={handleDispatch}
-        />
+      {/* Status Panel + Activity Log - Right side */}
+      <div className="w-80 h-full flex flex-col">
+        <div className="flex-1 overflow-hidden">
+          <StatusPanel
+            drones={drones}
+            alert={alert}
+            onDispatch={handleDispatch}
+          />
+        </div>
+        <ActivityLog entries={logEntries} />
       </div>
     </div>
   );
