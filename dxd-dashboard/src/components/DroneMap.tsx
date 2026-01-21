@@ -1,9 +1,9 @@
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useEffect } from 'react';
 import type { Drone, Alert } from '../data/mockData';
-import { mapCenter, mapZoom, statusColors, severityColors } from '../data/mockData';
+import { mapCenter, mapZoom, statusColors, severityColors, geofenceBoundary, isInsideGeofence } from '../data/mockData';
 
 // Fix for default marker icons in Leaflet with bundlers
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
@@ -50,8 +50,8 @@ const createDroneIcon = (status: Drone['status']) => {
 };
 
 // Create custom alert icon
-const createAlertIcon = (severity: Alert['severity']) => {
-  const color = severityColors[severity];
+const createAlertIcon = (severity: Alert['severity'], isExternal: boolean) => {
+  const color = isExternal ? '#f59e0b' : severityColors[severity]; // Orange for external, normal color for internal
   return L.divIcon({
     className: 'alert-marker',
     html: `
@@ -109,6 +109,7 @@ export default function DroneMap({ drones, alert, onDispatch }: DroneMapProps) {
   };
 
   const nearestDrone: Drone | null = alert ? findNearestDrone() : null;
+  const isAlertExternal = alert ? !isInsideGeofence(alert.lat, alert.lng) : false;
 
   return (
     <MapContainer
@@ -123,6 +124,33 @@ export default function DroneMap({ drones, alert, onDispatch }: DroneMapProps) {
       />
 
       <MapUpdater drones={drones} />
+
+      {/* Geofence boundary polygon */}
+      <Polygon
+        positions={geofenceBoundary}
+        pathOptions={{
+          color: '#dc2626',
+          fillColor: '#dc2626',
+          fillOpacity: 0.1,
+          weight: 2,
+          dashArray: '10, 10',
+        }}
+      />
+
+      {/* Drone coverage circles */}
+      {drones.map((drone) => (
+        <Circle
+          key={`coverage-${drone.id}`}
+          center={[drone.lat, drone.lng]}
+          radius={100}
+          pathOptions={{
+            color: statusColors[drone.status],
+            fillColor: statusColors[drone.status],
+            fillOpacity: 0.15,
+            weight: 1,
+          }}
+        />
+      ))}
 
       {/* Drone markers */}
       {drones.map((drone) => (
@@ -148,23 +176,32 @@ export default function DroneMap({ drones, alert, onDispatch }: DroneMapProps) {
       {alert && (
         <Marker
           position={[alert.lat, alert.lng]}
-          icon={createAlertIcon(alert.severity)}
+          icon={createAlertIcon(alert.severity, isAlertExternal)}
         >
           <Popup>
             <div className="text-sm">
-              <div className="font-bold text-red-600">
-                {alert.type.replace('_', ' ').toUpperCase()}
+              <div className={`font-bold ${isAlertExternal ? 'text-amber-600' : 'text-red-600'}`}>
+                {isAlertExternal ? '⚠ EXTERNAL THREAT' : alert.type.replace('_', ' ').toUpperCase()}
               </div>
               <div className="text-gray-600">{alert.description}</div>
               <div className="text-gray-600 mt-1">
-                Severity: <span className="font-semibold" style={{ color: severityColors[alert.severity] }}>
+                Severity: <span className="font-semibold" style={{ color: isAlertExternal ? '#f59e0b' : severityColors[alert.severity] }}>
                   {alert.severity.toUpperCase()}
                 </span>
               </div>
+              {isAlertExternal && (
+                <div className="text-amber-600 text-xs mt-1 font-medium">
+                  Outside secured perimeter
+                </div>
+              )}
               {nearestDrone && nearestDrone.status !== 'responding' && (
                 <button
                   onClick={() => onDispatch(nearestDrone.id)}
-                  className="mt-2 px-3 py-1 bg-red-600 text-white rounded text-xs font-semibold hover:bg-red-700 transition-colors"
+                  className={`mt-2 px-3 py-1 text-white rounded text-xs font-semibold transition-colors ${
+                    isAlertExternal
+                      ? 'bg-amber-600 hover:bg-amber-700'
+                      : 'bg-red-600 hover:bg-red-700'
+                  }`}
                 >
                   Dispatch {nearestDrone.name}
                 </button>

@@ -1,5 +1,5 @@
 import type { Drone, Alert } from '../data/mockData';
-import { statusColors, severityColors } from '../data/mockData';
+import { statusColors, severityColors, isInsideGeofence } from '../data/mockData';
 
 interface StatusPanelProps {
   drones: Drone[];
@@ -71,6 +71,8 @@ export default function StatusPanel({ drones, alert, onDispatch, dispatchStatus 
   };
 
   const nearestDrone: Drone | null = alert ? findNearestDrone() : null;
+  const isExternal = alert ? !isInsideGeofence(alert.lat, alert.lng) : false;
+  const alertColor = isExternal ? '#f59e0b' : severityColors[alert?.severity || 'high'];
 
   return (
     <div className="h-full flex flex-col bg-[#12121a] border-l border-gray-800">
@@ -91,14 +93,14 @@ export default function StatusPanel({ drones, alert, onDispatch, dispatchStatus 
           <div
             className="p-3 rounded-lg border"
             style={{
-              backgroundColor: `${severityColors[alert.severity]}15`,
-              borderColor: severityColors[alert.severity],
+              backgroundColor: `${alertColor}15`,
+              borderColor: alertColor,
             }}
           >
             <div className="flex items-center gap-2 mb-2">
               <svg
                 className="w-5 h-5"
-                fill={severityColors[alert.severity]}
+                fill={alertColor}
                 viewBox="0 0 20 20"
               >
                 <path
@@ -109,20 +111,27 @@ export default function StatusPanel({ drones, alert, onDispatch, dispatchStatus 
               </svg>
               <span
                 className="text-sm font-bold uppercase"
-                style={{ color: severityColors[alert.severity] }}
+                style={{ color: alertColor }}
               >
-                {alert.severity} Priority Alert
+                {isExternal ? 'External Threat' : `${alert.severity} Priority Alert`}
               </span>
             </div>
             <p className="text-white text-sm font-medium">
-              {alert.type.replace(/_/g, ' ').toUpperCase()}
+              {isExternal ? '⚠ EXTERNAL THREAT' : alert.type.replace(/_/g, ' ').toUpperCase()}
             </p>
             <p className="text-gray-400 text-xs mt-1">{alert.description}</p>
+            {isExternal && (
+              <p className="text-amber-500 text-xs mt-1 font-medium">Outside secured perimeter</p>
+            )}
 
             {nearestDrone && nearestDrone.status !== 'responding' && (
               <button
                 onClick={() => onDispatch(nearestDrone.id)}
-                className="mt-3 w-full py-2 px-4 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded transition-colors flex items-center justify-center gap-2"
+                className={`mt-3 w-full py-2 px-4 text-white text-sm font-bold rounded transition-colors flex items-center justify-center gap-2 ${
+                  isExternal
+                    ? 'bg-amber-600 hover:bg-amber-700'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />

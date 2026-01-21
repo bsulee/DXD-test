@@ -76,16 +76,47 @@ export const initialDrones: Drone[] = [
   },
 ];
 
-// The alert that will appear after 5 seconds
+// The alert that will appear after 5 seconds (inside geofence)
 export const scriptedAlert: Alert = {
   id: 'ALERT-001',
-  lat: 33.4275,
-  lng: -111.9355,
+  lat: 33.4265,
+  lng: -111.9380,
   type: 'perimeter_breach',
   severity: 'high',
   timestamp: new Date(),
   description: 'Motion detected at eastern perimeter fence',
 };
+
+// External alert that appears after 15 seconds (outside geofence)
+export const externalAlert: Alert = {
+  id: 'ALERT-002',
+  lat: 33.4295,
+  lng: -111.9320,
+  type: 'unauthorized_access',
+  severity: 'high',
+  timestamp: new Date(),
+  description: 'Unauthorized vehicle detected outside perimeter',
+};
+
+// Geofence boundary - secured perimeter polygon
+export const geofenceBoundary: [number, number][] = [
+  [33.4285, -111.9450],  // NW corner
+  [33.4285, -111.9350],  // NE corner
+  [33.4225, -111.9350],  // SE corner
+  [33.4225, -111.9450],  // SW corner
+];
+
+// Helper function to check if a point is inside the geofence
+export function isInsideGeofence(lat: number, lng: number): boolean {
+  const lats = geofenceBoundary.map(p => p[0]);
+  const lngs = geofenceBoundary.map(p => p[1]);
+  return (
+    lat >= Math.min(...lats) &&
+    lat <= Math.max(...lats) &&
+    lng >= Math.min(...lngs) &&
+    lng <= Math.max(...lngs)
+  );
+}
 
 // Map center point - ASU Tempe Campus
 export const mapCenter: [number, number] = [33.4255, -111.9400];
