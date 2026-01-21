@@ -5,7 +5,6 @@ import ActivityLog from './components/ActivityLog';
 import MetricsBar from './components/MetricsBar';
 import type { Drone, Alert, LogEntry } from './data/mockData';
 import { initialDrones, generateAlert } from './data/mockData';
-import { patrolRoutes } from './data/patrolRoutes';
 
 interface Metrics {
   activeDrones: number;
@@ -37,20 +36,44 @@ function App() {
   const [responseTimeFlash, setResponseTimeFlash] = useState(false);
   const dispatchStartTime = useRef<number | null>(null);
 
-  // Waypoint tracking for patrol routes
-  const [waypointIndex, setWaypointIndex] = useState<Record<string, number>>({
-    'DXD-001': 0,
-    'DXD-002': 0,
-    'DXD-003': 0,
-  });
-
-  // Track initial positions for patrol patterns (fallback)
-  const initialPositions = useRef(
-    initialDrones.reduce((acc, drone) => {
-      acc[drone.id] = { lat: drone.lat, lng: drone.lng };
-      return acc;
-    }, {} as Record<string, { lat: number; lng: number }>)
-  );
+  // Drone patrol configurations - 2 patrolling, 2 idle
+  const droneConfigs: Record<string, {
+    mode: 'patrol' | 'idle';
+    centerLat?: number;
+    centerLng?: number;
+    radius?: number;
+    speed?: number;
+    offset?: number;
+    lat?: number;
+    lng?: number;
+  }> = {
+    'DXD-001': {
+      mode: 'patrol',
+      centerLat: 33.4242,
+      centerLng: -111.9300,
+      radius: 0.0008,
+      speed: 0.15,
+      offset: 0,
+    },
+    'DXD-002': {
+      mode: 'idle',
+      lat: 33.4260,
+      lng: -111.9410,
+    },
+    'DXD-003': {
+      mode: 'patrol',
+      centerLat: 33.4260,
+      centerLng: -111.9380,
+      radius: 0.0006,
+      speed: 0.12,
+      offset: Math.PI,
+    },
+    'DXD-004': {
+      mode: 'idle',
+      lat: 33.4270,
+      lng: -111.9370,
+    },
+  };
 
   // Add log entry helper
   const addLogEntry = useCallback((type: LogEntry['type'], message: string) => {
@@ -186,20 +209,25 @@ function App() {
             return drone;
           }
 
-          // If drone is returning to patrol start
+          // Get drone config
+          const config = droneConfigs[drone.id];
+          if (!config) return drone;
+
+          // If drone is returning to patrol position
           if (drone.status === 'returning') {
-            const startPos = initialPositions.current[drone.id];
-            const dLat = startPos.lat - drone.lat;
-            const dLng = startPos.lng - drone.lng;
+            const targetLat = config.mode === 'patrol' ? config.centerLat! : config.lat!;
+            const targetLng = config.mode === 'patrol' ? config.centerLng! : config.lng!;
+            const dLat = targetLat - drone.lat;
+            const dLng = targetLng - drone.lng;
             const distance = Math.sqrt(dLat * dLat + dLng * dLng);
 
             if (distance < 0.0002) {
               return {
                 ...drone,
-                lat: startPos.lat,
-                lng: startPos.lng,
-                status: 'patrolling' as const,
-                speed: 12,
+                lat: targetLat,
+                lng: targetLng,
+                status: config.mode === 'patrol' ? 'patrolling' as const : 'idle' as const,
+                speed: config.mode === 'patrol' ? 12 : 0,
               };
             }
 
@@ -214,48 +242,25 @@ function App() {
             };
           }
 
-          // Patrolling - waypoint-based routes
-          const route = patrolRoutes[drone.id];
-          if (!route) {
-            // Fallback to circular pattern if no route defined
-            const startPos = initialPositions.current[drone.id];
-            const offset = drone.id.charCodeAt(drone.id.length - 1) * 0.5;
-            const radius = 0.0008;
+          // Idle drones stay in place
+          if (config.mode === 'idle') {
             return {
               ...drone,
-              lat: startPos.lat + Math.sin(time * 0.3 + offset) * radius,
-              lng: startPos.lng + Math.cos(time * 0.3 + offset) * radius,
-              heading: (time * 30 + offset * 60) % 360,
-              battery: Math.max(20, drone.battery - 0.001),
+              status: 'idle' as const,
+              lat: config.lat!,
+              lng: config.lng!,
+              speed: 0,
             };
           }
 
-          const currentWaypointIdx = waypointIndex[drone.id] || 0;
-          const currentWaypoint = route[currentWaypointIdx];
-
-          // Calculate distance to current waypoint
-          const dLat = currentWaypoint.lat - drone.lat;
-          const dLng = currentWaypoint.lng - drone.lng;
-          const distance = Math.sqrt(dLat * dLat + dLng * dLng);
-
-          // If close to waypoint, advance to next
-          if (distance < 0.0003) {
-            const nextIdx = (currentWaypointIdx + 1) % route.length;
-            setWaypointIndex(prev => ({
-              ...prev,
-              [drone.id]: nextIdx,
-            }));
-          }
-
-          // Move toward current waypoint
-          const patrolSpeed = 0.00015;
-          const ratio = distance > 0 ? Math.min(patrolSpeed / distance, 1) : 0;
-
+          // Patrolling drones - slow circular pattern
+          const angle = (time * config.speed! + config.offset!) % (Math.PI * 2);
           return {
             ...drone,
-            lat: drone.lat + dLat * ratio,
-            lng: drone.lng + dLng * ratio,
-            heading: Math.atan2(dLng, dLat) * (180 / Math.PI),
+            status: 'patrolling' as const,
+            lat: config.centerLat! + Math.sin(angle) * config.radius!,
+            lng: config.centerLng! + Math.cos(angle) * config.radius!,
+            heading: (angle * 180 / Math.PI) % 360,
             speed: 12,
             battery: Math.max(20, drone.battery - 0.001),
           };
@@ -264,7 +269,7 @@ function App() {
     }, 50); // 20fps for smooth movement
 
     return () => clearInterval(interval);
-  }, [alert, droneArrived, addLogEntry, waypointIndex]);
+  }, [alert, droneArrived, addLogEntry]);
 
   // Handle dispatch - supports both nearest and specific drone
   const handleDispatch = (droneId: string, isManual: boolean = false) => {

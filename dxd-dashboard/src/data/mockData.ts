@@ -63,17 +63,18 @@ export function generateAlert(): Alert {
 }
 
 // Initial drone positions - centered around ASU Tempe campus
+// 2 patrolling, 2 idle for calm demo
 export const initialDrones: Drone[] = [
   {
     id: 'DXD-001',
     name: 'Alpha',
-    lat: 33.4240,
-    lng: -111.9380,
+    lat: 33.4242,
+    lng: -111.9300,
     status: 'patrolling',
     battery: 87,
     speed: 12,
     heading: 45,
-    sector: 'Sector A',
+    sector: 'Hayden Library',
   },
   {
     id: 'DXD-002',
@@ -84,29 +85,29 @@ export const initialDrones: Drone[] = [
     battery: 95,
     speed: 0,
     heading: 0,
-    sector: 'Sector B',
+    sector: 'Standby East',
   },
   {
     id: 'DXD-003',
     name: 'Charlie',
-    lat: 33.4245,
-    lng: -111.9430,
+    lat: 33.4260,
+    lng: -111.9380,
     status: 'patrolling',
     battery: 72,
-    speed: 15,
+    speed: 12,
     heading: 180,
-    sector: 'Sector C',
+    sector: 'Music Building',
   },
   {
     id: 'DXD-004',
     name: 'Delta',
     lat: 33.4270,
     lng: -111.9370,
-    status: 'patrolling',
+    status: 'idle',
     battery: 64,
-    speed: 10,
-    heading: 270,
-    sector: 'Sector D',
+    speed: 0,
+    heading: 0,
+    sector: 'Standby North',
   },
 ];
 
