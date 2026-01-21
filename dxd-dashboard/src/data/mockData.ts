@@ -132,7 +132,7 @@ export function isInsideGeofence(lat: number, lng: number): boolean {
 
 // Map center point - ASU Tempe Campus
 export const mapCenter: [number, number] = [33.4235, -111.9360];
-export const mapZoom = 16;
+export const mapZoom = 15;
 
 // Status colors for easy reference
 export const statusColors = {
