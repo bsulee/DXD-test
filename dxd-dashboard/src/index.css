@@ -14,31 +14,6 @@ body {
   min-height: 100vh;
 }
 
-/* Leaflet map styles */
-.leaflet-container {
-  background: #1a1a2e !important;
-}
-
-/* Custom marker pulse animation */
-@keyframes pulse {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.2);
-    opacity: 0.8;
-  }
-}
-
-.drone-marker {
-  animation: pulse 2s ease-in-out infinite;
-}
-
-.alert-marker {
-  animation: pulse 0.5s ease-in-out infinite;
-}
-
 /* Activity log fade-in animation */
 @keyframes fadeIn {
   from {
