@@ -15,6 +15,9 @@ interface Metrics {
   coveragePercent: number;
 }
 
+// Build version for debugging deployments
+const BUILD_VERSION = 'v2.0.0-' + new Date().toISOString().slice(0, 10);
+
 function App() {
   // State for drones and alert
   const [drones, setDrones] = useState<Drone[]>(initialDrones);
@@ -290,6 +293,7 @@ function App() {
               <span className="text-gray-400 text-sm">
                 {new Date().toLocaleTimeString()}
               </span>
+              <span className="text-gray-600 text-xs ml-2">{BUILD_VERSION}</span>
             </div>
           </div>
         </div>
