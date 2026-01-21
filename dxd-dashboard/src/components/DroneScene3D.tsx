@@ -4,6 +4,8 @@ import { OrbitControls, Line } from '@react-three/drei';
 import * as THREE from 'three';
 import type { Drone, Alert } from '../data/mockData';
 import { geofenceBoundary, statusColors, mapCenter } from '../data/mockData';
+import { campusBuildings } from '../data/buildings';
+import type { Building } from '../data/buildings';
 
 interface DroneScene3DProps {
   drones: Drone[];
@@ -90,8 +92,8 @@ function DroneMarker({
       groupRef.current.position.x = x;
       groupRef.current.position.z = z;
 
-      // Gentle hover animation
-      groupRef.current.position.y = 3 + Math.sin(state.clock.elapsedTime * 2 + drone.id.charCodeAt(4)) * 0.3;
+      // Gentle hover animation - high altitude to fly above buildings
+      groupRef.current.position.y = 12 + Math.sin(state.clock.elapsedTime * 2 + drone.id.charCodeAt(4)) * 0.3;
 
       // Tilt based on velocity (lean into movement)
       const tiltX = velocity.z * 0.15; // Pitch (forward/backward tilt)
@@ -120,7 +122,7 @@ function DroneMarker({
   });
 
   return (
-    <group ref={groupRef} position={[x, 3, z]}>
+    <group ref={groupRef} position={[x, 12, z]}>
       {/* Drone body - hexagonal shape */}
       <mesh ref={bodyRef} onClick={onClick}>
         <cylinderGeometry args={[0.8, 1, 1.5, 6]} />
@@ -139,14 +141,14 @@ function DroneMarker({
       <pointLight position={[0, 0, 0]} color={color} intensity={2} distance={8} />
 
       {/* Coverage circle on ground (relative to world, not drone tilt) */}
-      <mesh position={[0, -2.9, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh position={[0, -11.9, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0, 4, 32]} />
         <meshBasicMaterial color={color} transparent opacity={0.15} />
       </mesh>
 
       {/* Selection/nearest indicator */}
       {isNearest && (
-        <mesh position={[0, -2.8, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <mesh position={[0, -11.8, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[1.5, 2, 32]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0.6} />
         </mesh>
@@ -298,6 +300,33 @@ function Geofence() {
   );
 }
 
+// Building mesh component
+function BuildingMesh({ building }: { building: Building }) {
+  const { x, z } = toXZ(building.position.lat, building.position.lng);
+
+  return (
+    <mesh
+      position={[x, building.height / 2, z]}
+      castShadow
+      receiveShadow
+    >
+      <boxGeometry args={[building.width, building.height, building.depth]} />
+      <meshStandardMaterial color={building.color} />
+    </mesh>
+  );
+}
+
+// Campus buildings group
+function CampusBuildings() {
+  return (
+    <group>
+      {campusBuildings.map(building => (
+        <BuildingMesh key={building.id} building={building} />
+      ))}
+    </group>
+  );
+}
+
 // Main component
 export default function DroneScene3D({
   drones,
@@ -345,6 +374,7 @@ export default function DroneScene3D({
         {/* Scene elements */}
         <Ground />
         <Geofence />
+        <CampusBuildings />
 
         {/* Drones */}
         {drones.map(drone => (
