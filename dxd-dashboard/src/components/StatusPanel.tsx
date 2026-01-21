@@ -75,9 +75,9 @@ export default function StatusPanel({ drones, alert, onDispatch, onDispatchManua
   const alertColor = severityColors[alert?.severity || 'high'];
 
   return (
-    <div className="h-full flex flex-col bg-[#12121a] lg:border-l border-t lg:border-t-0 border-gray-800">
+    <div className="h-full flex flex-col bg-[#12121a] lg:border-l border-t lg:border-t-0 border-gray-800 overflow-hidden">
       {/* Header - Hidden on mobile */}
-      <div className="hidden lg:block p-4 border-b border-gray-800">
+      <div className="hidden lg:block p-4 border-b border-gray-800 shrink-0">
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse" />
           <h1 className="text-lg font-bold text-white tracking-wide">
@@ -87,9 +87,11 @@ export default function StatusPanel({ drones, alert, onDispatch, onDispatchManua
         <p className="text-xs text-gray-500 mt-1">Drone Fleet Control System</p>
       </div>
 
-      {/* Alert Section */}
-      {alert && (
-        <div className="p-3 lg:p-4 border-b border-gray-800">
+      {/* Scrollable content area - everything scrolls together on mobile */}
+      <div className="flex-1 overflow-y-auto min-h-0">
+        {/* Alert Section */}
+        {alert && (
+          <div className="p-3 lg:p-4 border-b border-gray-800">
           <div
             className="p-3 rounded-lg border"
             style={{
@@ -147,76 +149,77 @@ export default function StatusPanel({ drones, alert, onDispatch, onDispatchManua
         </div>
       )}
 
-      {/* Drone List */}
-      <div className="flex-1 overflow-y-auto p-3 lg:p-4">
-        <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-          Active Fleet ({drones.length})
-        </h2>
+        {/* Drone List */}
+        <div className="p-3 lg:p-4">
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+            Active Fleet ({drones.length})
+          </h2>
 
-        <div className="space-y-2 lg:space-y-3">
-          {drones.map((drone) => {
-            const canDispatch = alert &&
-              drone.status !== 'responding' &&
-              dispatchStatus === 'idle';
+          <div className="space-y-2 lg:space-y-3">
+            {drones.map((drone) => {
+              const canDispatch = alert &&
+                drone.status !== 'responding' &&
+                dispatchStatus === 'idle';
 
-            return (
-              <div
-                key={drone.id}
-                className="p-3 lg:p-3 rounded-lg bg-[#1a1a2e] border border-gray-800 hover:border-gray-700 transition-colors"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-7 h-7 lg:w-8 lg:h-8 rounded-lg flex items-center justify-center shrink-0"
-                      style={{ backgroundColor: `${statusColors[drone.status]}20` }}
-                    >
-                      <svg
-                        className="w-4 h-4 lg:w-5 lg:h-5"
-                        fill={statusColors[drone.status]}
-                        viewBox="0 0 24 24"
+              return (
+                <div
+                  key={drone.id}
+                  className="p-3 lg:p-3 rounded-lg bg-[#1a1a2e] border border-gray-800 hover:border-gray-700 transition-colors"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-7 h-7 lg:w-8 lg:h-8 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: `${statusColors[drone.status]}20` }}
                       >
-                        <path d="M12 2L4 7V17L12 22L20 17V7L12 2Z" />
-                      </svg>
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-white text-sm font-semibold">
-                        {drone.name}
-                      </div>
-                      <div className="text-gray-500 text-xs">{drone.id}</div>
-                    </div>
-                  </div>
-                  <StatusBadge status={drone.status} />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <BatteryIndicator level={drone.battery} />
-                  <div className="flex items-center gap-2">
-                    {drone.speed > 0 && (
-                      <span className="text-xs text-gray-400">
-                        {drone.speed} km/h
-                      </span>
-                    )}
-                    {canDispatch && (
-                      <button
-                        onClick={() => onDispatchManual(drone.id)}
-                        className="min-h-[36px] min-w-[36px] lg:min-h-[40px] lg:min-w-[70px] px-2 lg:px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded transition-colors"
-                      >
-                        <span className="hidden lg:inline">Dispatch</span>
-                        <svg className="w-4 h-4 lg:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        <svg
+                          className="w-4 h-4 lg:w-5 lg:h-5"
+                          fill={statusColors[drone.status]}
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M12 2L4 7V17L12 22L20 17V7L12 2Z" />
                         </svg>
-                      </button>
-                    )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-white text-sm font-semibold">
+                          {drone.name}
+                        </div>
+                        <div className="text-gray-500 text-xs">{drone.id}</div>
+                      </div>
+                    </div>
+                    <StatusBadge status={drone.status} />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <BatteryIndicator level={drone.battery} />
+                    <div className="flex items-center gap-2">
+                      {drone.speed > 0 && (
+                        <span className="text-xs text-gray-400">
+                          {drone.speed} km/h
+                        </span>
+                      )}
+                      {canDispatch && (
+                        <button
+                          onClick={() => onDispatchManual(drone.id)}
+                          className="min-h-[36px] min-w-[36px] lg:min-h-[40px] lg:min-w-[70px] px-2 lg:px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded transition-colors"
+                        >
+                          <span className="hidden lg:inline">Dispatch</span>
+                          <svg className="w-4 h-4 lg:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
 
       {/* Footer - Hidden on mobile */}
-      <div className="hidden lg:block p-4 border-t border-gray-800">
+      <div className="hidden lg:block p-4 border-t border-gray-800 shrink-0">
         <div className="flex items-center justify-between text-xs text-gray-500">
           <span>DEUS X DEFENSE</span>
           <span className="flex items-center gap-1">
