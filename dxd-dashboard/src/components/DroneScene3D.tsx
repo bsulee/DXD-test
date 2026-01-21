@@ -13,6 +13,22 @@ interface DroneScene3DProps {
   onDispatch: (droneId: string) => void;
 }
 
+// Landing pads for idle drones (on top of buildings)
+const landingPads: Record<string, { lat: number; lng: number; buildingHeight: number; buildingName: string }> = {
+  'DXD-002': {
+    lat: 33.4242,      // Hayden Library position
+    lng: -111.9281,
+    buildingHeight: 6,
+    buildingName: 'Hayden Library',
+  },
+  'DXD-004': {
+    lat: 33.4218,      // Memorial Union position
+    lng: -111.9346,
+    buildingHeight: 5,
+    buildingName: 'Memorial Union',
+  },
+};
+
 // Convert lat/lng to 3D coordinates centered on map center
 function toXZ(lat: number, lng: number) {
   const centerLat = mapCenter[0];
@@ -74,7 +90,6 @@ function DroneMarker({
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const bodyRef = useRef<THREE.Mesh>(null);
-  const color = statusColors[drone.status];
 
   // Smooth position interpolation
   const { smoothPos, velocity } = useSmoothPosition(
@@ -85,6 +100,15 @@ function DroneMarker({
 
   const { x, z } = toXZ(smoothPos.lat, smoothPos.lng);
 
+  // Check if drone should be landed on a building
+  const landingPad = landingPads[drone.id];
+  const isLanded = drone.status === 'idle' && landingPad;
+
+  // Color based on status - gray when landed
+  const color = isLanded
+    ? '#6b7280'
+    : statusColors[drone.status];
+
   // Animation frame for hover and tilt
   useFrame((state) => {
     if (groupRef.current) {
@@ -92,37 +116,47 @@ function DroneMarker({
       groupRef.current.position.x = x;
       groupRef.current.position.z = z;
 
-      // Gentle hover animation - high altitude to fly above buildings
-      groupRef.current.position.y = 12 + Math.sin(state.clock.elapsedTime * 2 + drone.id.charCodeAt(4)) * 0.3;
+      if (isLanded) {
+        // Landed on building: no hover, no tilt, sitting on rooftop
+        groupRef.current.position.y = landingPad.buildingHeight + 1;
+        groupRef.current.rotation.x = 0;
+        groupRef.current.rotation.z = 0;
+        groupRef.current.rotation.y = 0;
+      } else {
+        // Flying: hover animation and tilt
+        groupRef.current.position.y = 12 + Math.sin(state.clock.elapsedTime * 2 + drone.id.charCodeAt(4)) * 0.3;
 
-      // Tilt based on velocity (lean into movement)
-      const tiltX = velocity.z * 0.15; // Pitch (forward/backward tilt)
-      const tiltZ = -velocity.x * 0.15; // Roll (left/right tilt)
+        // Tilt based on velocity (lean into movement)
+        const tiltX = velocity.z * 0.15;
+        const tiltZ = -velocity.x * 0.15;
 
-      // Clamp tilt to reasonable values
-      const maxTilt = 0.4;
-      const clampedTiltX = Math.max(-maxTilt, Math.min(maxTilt, tiltX));
-      const clampedTiltZ = Math.max(-maxTilt, Math.min(maxTilt, tiltZ));
+        // Clamp tilt to reasonable values
+        const maxTilt = 0.4;
+        const clampedTiltX = Math.max(-maxTilt, Math.min(maxTilt, tiltX));
+        const clampedTiltZ = Math.max(-maxTilt, Math.min(maxTilt, tiltZ));
 
-      // Smooth tilt transition
-      groupRef.current.rotation.x = lerp(groupRef.current.rotation.x, clampedTiltX, 0.1);
-      groupRef.current.rotation.z = lerp(groupRef.current.rotation.z, clampedTiltZ, 0.1);
+        // Smooth tilt transition
+        groupRef.current.rotation.x = lerp(groupRef.current.rotation.x, clampedTiltX, 0.1);
+        groupRef.current.rotation.z = lerp(groupRef.current.rotation.z, clampedTiltZ, 0.1);
 
-      // Face direction of travel (if moving significantly)
-      if (Math.abs(velocity.x) > 0.05 || Math.abs(velocity.z) > 0.05) {
-        const targetHeading = Math.atan2(velocity.x, velocity.z);
-        groupRef.current.rotation.y = lerp(groupRef.current.rotation.y, targetHeading, 0.05);
+        // Face direction of travel (if moving significantly)
+        if (Math.abs(velocity.x) > 0.05 || Math.abs(velocity.z) > 0.05) {
+          const targetHeading = Math.atan2(velocity.x, velocity.z);
+          groupRef.current.rotation.y = lerp(groupRef.current.rotation.y, targetHeading, 0.05);
+        }
       }
     }
 
-    // Slow rotation for the body when stationary
-    if (bodyRef.current && Math.abs(velocity.x) < 0.05 && Math.abs(velocity.z) < 0.05) {
+    // Slow rotation for the body when stationary and flying
+    if (bodyRef.current && !isLanded && Math.abs(velocity.x) < 0.05 && Math.abs(velocity.z) < 0.05) {
       bodyRef.current.rotation.y += 0.01;
     }
   });
 
+  const initialY = isLanded ? landingPad.buildingHeight + 1 : 12;
+
   return (
-    <group ref={groupRef} position={[x, 12, z]}>
+    <group ref={groupRef} position={[x, initialY, z]}>
       {/* Drone body - hexagonal shape */}
       <mesh ref={bodyRef} onClick={onClick}>
         <cylinderGeometry args={[0.8, 1, 1.5, 6]} />
@@ -140,15 +174,17 @@ function DroneMarker({
       {/* Center light */}
       <pointLight position={[0, 0, 0]} color={color} intensity={2} distance={8} />
 
-      {/* Coverage circle on ground (relative to world, not drone tilt) */}
-      <mesh position={[0, -11.9, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0, 4, 32]} />
-        <meshBasicMaterial color={color} transparent opacity={0.15} />
-      </mesh>
+      {/* Coverage circle on ground - only for flying drones */}
+      {!isLanded && (
+        <mesh position={[0, -11.9, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0, 4, 32]} />
+          <meshBasicMaterial color={color} transparent opacity={0.15} />
+        </mesh>
+      )}
 
       {/* Selection/nearest indicator */}
       {isNearest && (
-        <mesh position={[0, -11.8, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <mesh position={[0, isLanded ? -landingPad.buildingHeight : -11.8, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[1.5, 2, 32]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0.6} />
         </mesh>
@@ -159,6 +195,14 @@ function DroneMarker({
         <sphereGeometry args={[0.3, 8, 8]} />
         <meshBasicMaterial color={color} />
       </mesh>
+
+      {/* Landing pad indicator for grounded drones */}
+      {isLanded && (
+        <mesh position={[0, -0.8, 0]}>
+          <cylinderGeometry args={[1, 1, 0.1, 16]} />
+          <meshStandardMaterial color="#333" />
+        </mesh>
+      )}
     </group>
   );
 }
@@ -215,42 +259,47 @@ function AlertMarker({ alert }: { alert: Alert }) {
 
 // Ground plane with satellite texture (or fallback color)
 function Ground() {
-  const [texture, setTexture] = useState<THREE.Texture | null>(null);
+  const textureRef = useRef<THREE.Texture | null>(null);
+  const [textureLoaded, setTextureLoaded] = useState(false);
 
   useEffect(() => {
     const loader = new THREE.TextureLoader();
+
+    // Esri World Imagery (free, no API key needed)
+    const satelliteUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/16/25800/12677';
+
     loader.load(
-      '/asu-campus.jpg',
-      (loadedTexture) => {
-        loadedTexture.anisotropy = 16;
-        setTexture(loadedTexture);
+      satelliteUrl,
+      (texture) => {
+        texture.wrapS = THREE.ClampToEdgeWrapping;
+        texture.wrapT = THREE.ClampToEdgeWrapping;
+        texture.minFilter = THREE.LinearFilter;
+        textureRef.current = texture;
+        setTextureLoaded(true);
       },
       undefined,
       () => {
-        console.log('Satellite texture not found, using fallback color');
+        console.log('Satellite texture failed to load, using fallback');
       }
     );
   }, []);
 
   return (
-    <>
+    <group>
       {/* Main ground */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]} receiveShadow>
         <planeGeometry args={[200, 200]} />
-        {texture ? (
-          <meshStandardMaterial map={texture} />
+        {textureLoaded && textureRef.current ? (
+          <meshStandardMaterial map={textureRef.current} />
         ) : (
-          <meshStandardMaterial color="#1a472a" />
+          <meshStandardMaterial color="#2d4a2d" />
         )}
       </mesh>
-      {/* Grid overlay - only show if no texture */}
-      {!texture && (
-        <gridHelper
-          args={[200, 50, '#1a3a1a', '#152515']}
-          position={[0, 0.02, 0]}
-        />
+      {/* Only show grid if no texture */}
+      {!textureLoaded && (
+        <gridHelper args={[200, 40, '#3d5a3d', '#3d5a3d']} position={[0, 0.01, 0]} />
       )}
-    </>
+    </group>
   );
 }
 
