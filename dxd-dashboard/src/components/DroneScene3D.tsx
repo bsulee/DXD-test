@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Line } from '@react-three/drei';
 import * as THREE from 'three';
@@ -129,20 +129,43 @@ function AlertMarker({ alert }: { alert: Alert }) {
   );
 }
 
-// Ground plane with grid
+// Ground plane with satellite texture (or fallback color)
 function Ground() {
+  const [texture, setTexture] = useState<THREE.Texture | null>(null);
+
+  useEffect(() => {
+    const loader = new THREE.TextureLoader();
+    loader.load(
+      '/asu-campus.jpg',
+      (loadedTexture) => {
+        loadedTexture.anisotropy = 16;
+        setTexture(loadedTexture);
+      },
+      undefined,
+      () => {
+        console.log('Satellite texture not found, using fallback color');
+      }
+    );
+  }, []);
+
   return (
     <>
       {/* Main ground */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]} receiveShadow>
         <planeGeometry args={[200, 200]} />
-        <meshStandardMaterial color="#0a1a0a" />
+        {texture ? (
+          <meshStandardMaterial map={texture} />
+        ) : (
+          <meshStandardMaterial color="#1a472a" />
+        )}
       </mesh>
-      {/* Grid overlay */}
-      <gridHelper
-        args={[200, 50, '#1a3a1a', '#152515']}
-        position={[0, 0.02, 0]}
-      />
+      {/* Grid overlay - only show if no texture */}
+      {!texture && (
+        <gridHelper
+          args={[200, 50, '#1a3a1a', '#152515']}
+          position={[0, 0.02, 0]}
+        />
+      )}
     </>
   );
 }
