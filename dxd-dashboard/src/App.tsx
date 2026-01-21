@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import DroneMap from './components/DroneMap';
+import DroneScene3D from './components/DroneScene3D';
 import StatusPanel from './components/StatusPanel';
 import ActivityLog from './components/ActivityLog';
 import MetricsBar from './components/MetricsBar';
@@ -308,8 +308,8 @@ function App() {
             </div>
           )}
 
-          {/* Map */}
-          <DroneMap
+          {/* 3D Scene */}
+          <DroneScene3D
             drones={drones}
             alert={alert}
             onDispatch={(droneId) => handleDispatch(droneId, false)}
