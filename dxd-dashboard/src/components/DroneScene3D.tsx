@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Line } from '@react-three/drei';
 import * as THREE from 'three';
@@ -22,7 +22,45 @@ function toXZ(lat: number, lng: number) {
   };
 }
 
-// Drone 3D model (hexagonal prism shape like the 2D icon)
+// Smooth interpolation helper
+function lerp(start: number, end: number, factor: number): number {
+  return start + (end - start) * factor;
+}
+
+// Hook for smooth drone position with velocity tracking
+function useSmoothPosition(
+  targetLat: number,
+  targetLng: number,
+  speed: number = 0.08
+) {
+  const [smoothPos, setSmoothPos] = useState({ lat: targetLat, lng: targetLng });
+  const [velocity, setVelocity] = useState({ x: 0, z: 0 });
+  const prevPosRef = useRef({ lat: targetLat, lng: targetLng });
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSmoothPos(prev => {
+        const newLat = lerp(prev.lat, targetLat, speed);
+        const newLng = lerp(prev.lng, targetLng, speed);
+
+        // Calculate velocity for tilt effect
+        setVelocity({
+          x: (newLng - prev.lng) * 10000,
+          z: (newLat - prev.lat) * 10000,
+        });
+
+        prevPosRef.current = { lat: newLat, lng: newLng };
+        return { lat: newLat, lng: newLng };
+      });
+    }, 16); // ~60fps
+
+    return () => clearInterval(interval);
+  }, [targetLat, targetLng, speed]);
+
+  return { smoothPos, velocity };
+}
+
+// Drone 3D model with smooth movement and physics-based tilt
 function DroneMarker({
   drone,
   isNearest,
@@ -32,46 +70,90 @@ function DroneMarker({
   isNearest: boolean;
   onClick: () => void;
 }) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const { x, z } = toXZ(drone.lat, drone.lng);
+  const groupRef = useRef<THREE.Group>(null);
+  const bodyRef = useRef<THREE.Mesh>(null);
   const color = statusColors[drone.status];
 
-  // Gentle hover animation
+  // Smooth position interpolation
+  const { smoothPos, velocity } = useSmoothPosition(
+    drone.lat,
+    drone.lng,
+    0.08
+  );
+
+  const { x, z } = toXZ(smoothPos.lat, smoothPos.lng);
+
+  // Animation frame for hover and tilt
   useFrame((state) => {
-    if (meshRef.current) {
-      meshRef.current.position.y = 3 + Math.sin(state.clock.elapsedTime * 2 + drone.id.charCodeAt(4)) * 0.3;
-      // Rotate slowly
-      meshRef.current.rotation.y += 0.01;
+    if (groupRef.current) {
+      // Update position smoothly
+      groupRef.current.position.x = x;
+      groupRef.current.position.z = z;
+
+      // Gentle hover animation
+      groupRef.current.position.y = 3 + Math.sin(state.clock.elapsedTime * 2 + drone.id.charCodeAt(4)) * 0.3;
+
+      // Tilt based on velocity (lean into movement)
+      const tiltX = velocity.z * 0.15; // Pitch (forward/backward tilt)
+      const tiltZ = -velocity.x * 0.15; // Roll (left/right tilt)
+
+      // Clamp tilt to reasonable values
+      const maxTilt = 0.4;
+      const clampedTiltX = Math.max(-maxTilt, Math.min(maxTilt, tiltX));
+      const clampedTiltZ = Math.max(-maxTilt, Math.min(maxTilt, tiltZ));
+
+      // Smooth tilt transition
+      groupRef.current.rotation.x = lerp(groupRef.current.rotation.x, clampedTiltX, 0.1);
+      groupRef.current.rotation.z = lerp(groupRef.current.rotation.z, clampedTiltZ, 0.1);
+
+      // Face direction of travel (if moving significantly)
+      if (Math.abs(velocity.x) > 0.05 || Math.abs(velocity.z) > 0.05) {
+        const targetHeading = Math.atan2(velocity.x, velocity.z);
+        groupRef.current.rotation.y = lerp(groupRef.current.rotation.y, targetHeading, 0.05);
+      }
+    }
+
+    // Slow rotation for the body when stationary
+    if (bodyRef.current && Math.abs(velocity.x) < 0.05 && Math.abs(velocity.z) < 0.05) {
+      bodyRef.current.rotation.y += 0.01;
     }
   });
 
   return (
-    <group position={[x, 0, z]}>
+    <group ref={groupRef} position={[x, 3, z]}>
       {/* Drone body - hexagonal shape */}
-      <mesh ref={meshRef} onClick={onClick}>
+      <mesh ref={bodyRef} onClick={onClick}>
         <cylinderGeometry args={[0.8, 1, 1.5, 6]} />
         <meshStandardMaterial color={color} metalness={0.3} roughness={0.7} />
       </mesh>
 
-      {/* Center light */}
-      <pointLight position={[0, 3, 0]} color={color} intensity={2} distance={8} />
+      {/* Rotor arms - 4 small cylinders */}
+      {[[0.9, 0.9], [-0.9, 0.9], [0.9, -0.9], [-0.9, -0.9]].map(([rx, rz], i) => (
+        <mesh key={i} position={[rx, 0.2, rz]}>
+          <cylinderGeometry args={[0.2, 0.2, 0.1, 8]} />
+          <meshStandardMaterial color="#333" metalness={0.5} />
+        </mesh>
+      ))}
 
-      {/* Coverage circle on ground */}
-      <mesh position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      {/* Center light */}
+      <pointLight position={[0, 0, 0]} color={color} intensity={2} distance={8} />
+
+      {/* Coverage circle on ground (relative to world, not drone tilt) */}
+      <mesh position={[0, -2.9, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0, 4, 32]} />
         <meshBasicMaterial color={color} transparent opacity={0.15} />
       </mesh>
 
       {/* Selection/nearest indicator */}
       {isNearest && (
-        <mesh position={[0, 0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <mesh position={[0, -2.8, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[1.5, 2, 32]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0.6} />
         </mesh>
       )}
 
-      {/* Drone name label (simple indicator) */}
-      <mesh position={[0, 5.5, 0]}>
+      {/* Drone status indicator above */}
+      <mesh position={[0, 2, 0]}>
         <sphereGeometry args={[0.3, 8, 8]} />
         <meshBasicMaterial color={color} />
       </mesh>
@@ -129,20 +211,43 @@ function AlertMarker({ alert }: { alert: Alert }) {
   );
 }
 
-// Ground plane with grid
+// Ground plane with satellite texture (or fallback color)
 function Ground() {
+  const [texture, setTexture] = useState<THREE.Texture | null>(null);
+
+  useEffect(() => {
+    const loader = new THREE.TextureLoader();
+    loader.load(
+      '/asu-campus.jpg',
+      (loadedTexture) => {
+        loadedTexture.anisotropy = 16;
+        setTexture(loadedTexture);
+      },
+      undefined,
+      () => {
+        console.log('Satellite texture not found, using fallback color');
+      }
+    );
+  }, []);
+
   return (
     <>
       {/* Main ground */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]} receiveShadow>
         <planeGeometry args={[200, 200]} />
-        <meshStandardMaterial color="#0a1a0a" />
+        {texture ? (
+          <meshStandardMaterial map={texture} />
+        ) : (
+          <meshStandardMaterial color="#1a472a" />
+        )}
       </mesh>
-      {/* Grid overlay */}
-      <gridHelper
-        args={[200, 50, '#1a3a1a', '#152515']}
-        position={[0, 0.02, 0]}
-      />
+      {/* Grid overlay - only show if no texture */}
+      {!texture && (
+        <gridHelper
+          args={[200, 50, '#1a3a1a', '#152515']}
+          position={[0, 0.02, 0]}
+        />
+      )}
     </>
   );
 }
