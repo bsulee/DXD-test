@@ -32,7 +32,7 @@ export default function ActivityLog({ entries }: ActivityLogProps) {
   return (
     <div className="flex flex-col bg-[#0f0f1a] border-t border-gray-800">
       {/* Header */}
-      <div className="px-4 py-2 border-b border-gray-800 flex items-center gap-2">
+      <div className="px-3 lg:px-4 py-2 border-b border-gray-800 flex items-center gap-2">
         <svg
           className="w-4 h-4 text-gray-400"
           fill="none"
@@ -54,7 +54,7 @@ export default function ActivityLog({ entries }: ActivityLogProps) {
       {/* Log entries */}
       <div
         ref={scrollRef}
-        className="h-[200px] overflow-y-auto font-mono text-xs p-2 space-y-1"
+        className="h-[120px] lg:h-[200px] overflow-y-auto font-mono text-xs p-2 space-y-1"
       >
         {entries.length === 0 ? (
           <div className="text-gray-600 text-center py-4">
@@ -64,19 +64,19 @@ export default function ActivityLog({ entries }: ActivityLogProps) {
           entries.map((entry, index) => (
             <div
               key={entry.id}
-              className="flex items-start gap-2 py-1 animate-fade-in"
+              className="flex items-start gap-1.5 lg:gap-2 py-1 animate-fade-in"
               style={{
                 animationDelay: `${index * 50}ms`,
               }}
             >
               {/* Timestamp */}
-              <span className="text-gray-500 shrink-0">
+              <span className="text-gray-500 shrink-0 text-[10px] lg:text-xs">
                 {formatTime(entry.timestamp)}
               </span>
 
               {/* Type badge */}
               <span
-                className="px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0 uppercase"
+                className="px-1 lg:px-1.5 py-0.5 rounded text-[9px] lg:text-[10px] font-bold shrink-0 uppercase"
                 style={{
                   backgroundColor: `${logTypeColors[entry.type]}20`,
                   color: logTypeColors[entry.type],
@@ -86,7 +86,7 @@ export default function ActivityLog({ entries }: ActivityLogProps) {
               </span>
 
               {/* Message */}
-              <span className="text-gray-300 break-words">
+              <span className="text-gray-300 break-words text-[10px] lg:text-xs">
                 {entry.message}
               </span>
             </div>
