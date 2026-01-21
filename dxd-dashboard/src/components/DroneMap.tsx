@@ -1,9 +1,9 @@
-import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon, Circle } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon, Circle, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useEffect } from 'react';
 import type { Drone, Alert } from '../data/mockData';
-import { mapCenter, mapZoom, statusColors, severityColors, geofenceBoundary, isInsideGeofence } from '../data/mockData';
+import { mapCenter, mapZoom, statusColors, severityColors, geofenceBoundary } from '../data/mockData';
 
 // Fix for default marker icons in Leaflet with bundlers
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
@@ -50,8 +50,8 @@ const createDroneIcon = (status: Drone['status']) => {
 };
 
 // Create custom alert icon
-const createAlertIcon = (severity: Alert['severity'], isExternal: boolean) => {
-  const color = isExternal ? '#f59e0b' : severityColors[severity]; // Orange for external, normal color for internal
+const createAlertIcon = (severity: Alert['severity']) => {
+  const color = severityColors[severity];
   return L.divIcon({
     className: 'alert-marker',
     html: `
@@ -109,15 +109,17 @@ export default function DroneMap({ drones, alert, onDispatch }: DroneMapProps) {
   };
 
   const nearestDrone: Drone | null = alert ? findNearestDrone() : null;
-  const isAlertExternal = alert ? !isInsideGeofence(alert.lat, alert.lng) : false;
 
   return (
     <MapContainer
       center={mapCenter}
       zoom={mapZoom}
       style={{ height: '100%', width: '100%' }}
-      zoomControl={true}
+      zoomControl={false}
     >
+      {/* Zoom controls in bottom-left */}
+      <ZoomControl position="bottomleft" />
+
       <TileLayer
         attribution='&copy; <a href="https://carto.com/">CARTO</a>'
         url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
@@ -176,32 +178,24 @@ export default function DroneMap({ drones, alert, onDispatch }: DroneMapProps) {
       {alert && (
         <Marker
           position={[alert.lat, alert.lng]}
-          icon={createAlertIcon(alert.severity, isAlertExternal)}
+          icon={createAlertIcon(alert.severity)}
         >
           <Popup>
             <div className="text-sm">
-              <div className={`font-bold ${isAlertExternal ? 'text-amber-600' : 'text-red-600'}`}>
-                {isAlertExternal ? '⚠ EXTERNAL THREAT' : alert.type.replace('_', ' ').toUpperCase()}
+              <div className="font-bold text-red-600">
+                {alert.type.replace(/_/g, ' ').toUpperCase()}
               </div>
-              <div className="text-gray-600">{alert.description}</div>
+              <div className="text-gray-600 font-medium">{alert.locationName}</div>
+              <div className="text-gray-500 text-xs mt-1">{alert.description}</div>
               <div className="text-gray-600 mt-1">
-                Severity: <span className="font-semibold" style={{ color: isAlertExternal ? '#f59e0b' : severityColors[alert.severity] }}>
+                Severity: <span className="font-semibold" style={{ color: severityColors[alert.severity] }}>
                   {alert.severity.toUpperCase()}
                 </span>
               </div>
-              {isAlertExternal && (
-                <div className="text-amber-600 text-xs mt-1 font-medium">
-                  Outside secured perimeter
-                </div>
-              )}
               {nearestDrone && nearestDrone.status !== 'responding' && (
                 <button
                   onClick={() => onDispatch(nearestDrone.id)}
-                  className={`mt-2 px-3 py-1 text-white rounded text-xs font-semibold transition-colors ${
-                    isAlertExternal
-                      ? 'bg-amber-600 hover:bg-amber-700'
-                      : 'bg-red-600 hover:bg-red-700'
-                  }`}
+                  className="mt-2 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold transition-colors min-h-[36px]"
                 >
                   Dispatch {nearestDrone.name}
                 </button>

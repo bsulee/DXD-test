@@ -19,6 +19,7 @@ export interface Alert {
   severity: 'low' | 'medium' | 'high';
   timestamp: Date;
   description: string;
+  locationName: string;
 }
 
 export interface LogEntry {
@@ -26,6 +27,39 @@ export interface LogEntry {
   timestamp: Date;
   type: 'patrol' | 'alert' | 'dispatch' | 'arrival' | 'system';
   message: string;
+}
+
+// ASU Campus alert locations
+export const asuAlertLocations = [
+  { lat: 33.4242, lng: -111.9281, name: "Hayden Library", inside: true },
+  { lat: 33.4218, lng: -111.9346, name: "Memorial Union", inside: true },
+  { lat: 33.4255, lng: -111.9325, name: "Old Main", inside: true },
+  { lat: 33.4203, lng: -111.9340, name: "Sun Devil Stadium", inside: false },
+  { lat: 33.4237, lng: -111.9450, name: "Wells Fargo Arena", inside: false },
+];
+
+// Alert types for variety
+const alertTypes: { type: Alert['type']; description: string }[] = [
+  { type: 'perimeter_breach', description: 'Perimeter breach detected' },
+  { type: 'motion_detected', description: 'Suspicious motion detected' },
+  { type: 'unauthorized_access', description: 'Unauthorized access attempt' },
+];
+
+// Generate a random alert from ASU locations
+export function generateAlert(): Alert {
+  const location = asuAlertLocations[Math.floor(Math.random() * asuAlertLocations.length)];
+  const alertType = alertTypes[Math.floor(Math.random() * alertTypes.length)];
+
+  return {
+    id: `ALERT-${Date.now()}`,
+    lat: location.lat,
+    lng: location.lng,
+    type: alertType.type,
+    severity: 'high',
+    timestamp: new Date(),
+    description: `${alertType.description} at ${location.name}`,
+    locationName: location.name,
+  };
 }
 
 // Initial drone positions - centered around ASU Tempe campus
@@ -76,34 +110,12 @@ export const initialDrones: Drone[] = [
   },
 ];
 
-// The alert that will appear after 5 seconds (inside geofence)
-export const scriptedAlert: Alert = {
-  id: 'ALERT-001',
-  lat: 33.4265,
-  lng: -111.9380,
-  type: 'perimeter_breach',
-  severity: 'high',
-  timestamp: new Date(),
-  description: 'Motion detected at eastern perimeter fence',
-};
-
-// External alert that appears after 15 seconds (outside geofence)
-export const externalAlert: Alert = {
-  id: 'ALERT-002',
-  lat: 33.4295,
-  lng: -111.9320,
-  type: 'unauthorized_access',
-  severity: 'high',
-  timestamp: new Date(),
-  description: 'Unauthorized vehicle detected outside perimeter',
-};
-
-// Geofence boundary - secured perimeter polygon
+// Geofence boundary - secured perimeter polygon (expanded to cover ASU campus)
 export const geofenceBoundary: [number, number][] = [
-  [33.4285, -111.9450],  // NW corner
-  [33.4285, -111.9350],  // NE corner
-  [33.4225, -111.9350],  // SE corner
-  [33.4225, -111.9450],  // SW corner
+  [33.4280, -111.9460],  // NW corner
+  [33.4280, -111.9260],  // NE corner
+  [33.4190, -111.9260],  // SE corner
+  [33.4190, -111.9460],  // SW corner
 ];
 
 // Helper function to check if a point is inside the geofence
@@ -119,7 +131,7 @@ export function isInsideGeofence(lat: number, lng: number): boolean {
 }
 
 // Map center point - ASU Tempe Campus
-export const mapCenter: [number, number] = [33.4255, -111.9400];
+export const mapCenter: [number, number] = [33.4235, -111.9360];
 export const mapZoom = 16;
 
 // Status colors for easy reference

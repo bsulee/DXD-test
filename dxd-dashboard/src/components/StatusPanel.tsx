@@ -1,10 +1,11 @@
 import type { Drone, Alert } from '../data/mockData';
-import { statusColors, severityColors, isInsideGeofence } from '../data/mockData';
+import { statusColors, severityColors } from '../data/mockData';
 
 interface StatusPanelProps {
   drones: Drone[];
   alert: Alert | null;
   onDispatch: (droneId: string) => void;
+  onDispatchManual: (droneId: string) => void;
   dispatchStatus: 'idle' | 'en_route' | 'on_scene';
 }
 
@@ -18,7 +19,7 @@ function BatteryIndicator({ level }: { level: number }) {
 
   return (
     <div className="flex items-center gap-1.5">
-      <div className="w-12 h-3 bg-gray-700 rounded-sm overflow-hidden">
+      <div className="w-10 lg:w-12 h-2.5 lg:h-3 bg-gray-700 rounded-sm overflow-hidden">
         <div
           className={`h-full ${getColor()} transition-all duration-500`}
           style={{ width: `${level}%` }}
@@ -49,7 +50,7 @@ function StatusBadge({ status }: { status: Drone['status'] }) {
   );
 }
 
-export default function StatusPanel({ drones, alert, onDispatch, dispatchStatus }: StatusPanelProps) {
+export default function StatusPanel({ drones, alert, onDispatch, onDispatchManual, dispatchStatus }: StatusPanelProps) {
   // Find nearest available drone to alert
   const findNearestDrone = (): Drone | null => {
     if (!alert) return null;
@@ -71,13 +72,12 @@ export default function StatusPanel({ drones, alert, onDispatch, dispatchStatus 
   };
 
   const nearestDrone: Drone | null = alert ? findNearestDrone() : null;
-  const isExternal = alert ? !isInsideGeofence(alert.lat, alert.lng) : false;
-  const alertColor = isExternal ? '#f59e0b' : severityColors[alert?.severity || 'high'];
+  const alertColor = severityColors[alert?.severity || 'high'];
 
   return (
-    <div className="h-full flex flex-col bg-[#12121a] border-l border-gray-800">
-      {/* Header */}
-      <div className="p-4 border-b border-gray-800">
+    <div className="h-full flex flex-col bg-[#12121a] lg:border-l border-t lg:border-t-0 border-gray-800">
+      {/* Header - Hidden on mobile */}
+      <div className="hidden lg:block p-4 border-b border-gray-800">
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse" />
           <h1 className="text-lg font-bold text-white tracking-wide">
@@ -89,7 +89,7 @@ export default function StatusPanel({ drones, alert, onDispatch, dispatchStatus 
 
       {/* Alert Section */}
       {alert && (
-        <div className="p-4 border-b border-gray-800">
+        <div className="p-3 lg:p-4 border-b border-gray-800">
           <div
             className="p-3 rounded-lg border"
             style={{
@@ -99,7 +99,7 @@ export default function StatusPanel({ drones, alert, onDispatch, dispatchStatus 
           >
             <div className="flex items-center gap-2 mb-2">
               <svg
-                className="w-5 h-5"
+                className="w-5 h-5 shrink-0"
                 fill={alertColor}
                 viewBox="0 0 20 20"
               >
@@ -113,30 +113,23 @@ export default function StatusPanel({ drones, alert, onDispatch, dispatchStatus 
                 className="text-sm font-bold uppercase"
                 style={{ color: alertColor }}
               >
-                {isExternal ? 'External Threat' : `${alert.severity} Priority Alert`}
+                {alert.severity} Priority Alert
               </span>
             </div>
             <p className="text-white text-sm font-medium">
-              {isExternal ? '⚠ EXTERNAL THREAT' : alert.type.replace(/_/g, ' ').toUpperCase()}
+              {alert.type.replace(/_/g, ' ').toUpperCase()}
             </p>
-            <p className="text-gray-400 text-xs mt-1">{alert.description}</p>
-            {isExternal && (
-              <p className="text-amber-500 text-xs mt-1 font-medium">Outside secured perimeter</p>
-            )}
+            <p className="text-gray-400 text-xs mt-1">{alert.locationName}</p>
 
             {nearestDrone && nearestDrone.status !== 'responding' && (
               <button
                 onClick={() => onDispatch(nearestDrone.id)}
-                className={`mt-3 w-full py-2 px-4 text-white text-sm font-bold rounded transition-colors flex items-center justify-center gap-2 ${
-                  isExternal
-                    ? 'bg-amber-600 hover:bg-amber-700'
-                    : 'bg-red-600 hover:bg-red-700'
-                }`}
+                className="mt-3 w-full min-h-[44px] py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded transition-colors flex items-center justify-center gap-2"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
-                DISPATCH {nearestDrone.name.toUpperCase()}
+                DISPATCH NEAREST ({nearestDrone.name.toUpperCase()})
               </button>
             )}
 
@@ -155,56 +148,75 @@ export default function StatusPanel({ drones, alert, onDispatch, dispatchStatus 
       )}
 
       {/* Drone List */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-3 lg:p-4">
         <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
           Active Fleet ({drones.length})
         </h2>
 
-        <div className="space-y-3">
-          {drones.map((drone) => (
-            <div
-              key={drone.id}
-              className="p-3 rounded-lg bg-[#1a1a2e] border border-gray-800 hover:border-gray-700 transition-colors"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center"
-                    style={{ backgroundColor: `${statusColors[drone.status]}20` }}
-                  >
-                    <svg
-                      className="w-5 h-5"
-                      fill={statusColors[drone.status]}
-                      viewBox="0 0 24 24"
+        <div className="space-y-2 lg:space-y-3">
+          {drones.map((drone) => {
+            const canDispatch = alert &&
+              drone.status !== 'responding' &&
+              dispatchStatus === 'idle';
+
+            return (
+              <div
+                key={drone.id}
+                className="p-3 lg:p-3 rounded-lg bg-[#1a1a2e] border border-gray-800 hover:border-gray-700 transition-colors"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-7 h-7 lg:w-8 lg:h-8 rounded-lg flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: `${statusColors[drone.status]}20` }}
                     >
-                      <path d="M12 2L4 7V17L12 22L20 17V7L12 2Z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <div className="text-white text-sm font-semibold">
-                      {drone.name}
+                      <svg
+                        className="w-4 h-4 lg:w-5 lg:h-5"
+                        fill={statusColors[drone.status]}
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M12 2L4 7V17L12 22L20 17V7L12 2Z" />
+                      </svg>
                     </div>
-                    <div className="text-gray-500 text-xs">{drone.id}</div>
+                    <div className="min-w-0">
+                      <div className="text-white text-sm font-semibold">
+                        {drone.name}
+                      </div>
+                      <div className="text-gray-500 text-xs">{drone.id}</div>
+                    </div>
+                  </div>
+                  <StatusBadge status={drone.status} />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <BatteryIndicator level={drone.battery} />
+                  <div className="flex items-center gap-2">
+                    {drone.speed > 0 && (
+                      <span className="text-xs text-gray-400">
+                        {drone.speed} km/h
+                      </span>
+                    )}
+                    {canDispatch && (
+                      <button
+                        onClick={() => onDispatchManual(drone.id)}
+                        className="min-h-[36px] min-w-[36px] lg:min-h-[40px] lg:min-w-[70px] px-2 lg:px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded transition-colors"
+                      >
+                        <span className="hidden lg:inline">Dispatch</span>
+                        <svg className="w-4 h-4 lg:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 </div>
-                <StatusBadge status={drone.status} />
               </div>
-
-              <div className="flex items-center justify-between">
-                <BatteryIndicator level={drone.battery} />
-                {drone.speed > 0 && (
-                  <span className="text-xs text-gray-400">
-                    {drone.speed} km/h
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="p-4 border-t border-gray-800">
+      {/* Footer - Hidden on mobile */}
+      <div className="hidden lg:block p-4 border-t border-gray-800">
         <div className="flex items-center justify-between text-xs text-gray-500">
           <span>DEUS X DEFENSE</span>
           <span className="flex items-center gap-1">

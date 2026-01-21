@@ -4,7 +4,7 @@ import StatusPanel from './components/StatusPanel';
 import ActivityLog from './components/ActivityLog';
 import MetricsBar from './components/MetricsBar';
 import type { Drone, Alert, LogEntry } from './data/mockData';
-import { initialDrones, scriptedAlert, externalAlert, isInsideGeofence } from './data/mockData';
+import { initialDrones, generateAlert } from './data/mockData';
 
 interface Metrics {
   activeDrones: number;
@@ -12,11 +12,10 @@ interface Metrics {
   avgResponseTime: number;
   responseTimes: number[];
   alertsToday: number;
-  coveragePercent: number;
 }
 
 // Build version for debugging deployments
-const BUILD_VERSION = 'v2.0.0-' + new Date().toISOString().slice(0, 10);
+const BUILD_VERSION = 'v3.0.0-' + new Date().toISOString().slice(0, 10);
 
 function App() {
   // State for drones and alert
@@ -25,14 +24,14 @@ function App() {
   const [respondingDroneId, setRespondingDroneId] = useState<string | null>(null);
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
   const [droneArrived, setDroneArrived] = useState(false);
+  const [alertResolved, setAlertResolved] = useState(false);
   const [dispatchStatus, setDispatchStatus] = useState<'idle' | 'en_route' | 'on_scene'>('idle');
   const [metrics, setMetrics] = useState<Metrics>({
     activeDrones: initialDrones.filter(d => d.status !== 'idle').length,
     totalDrones: initialDrones.length,
-    avgResponseTime: 0,
+    avgResponseTime: -1, // -1 indicates no responses yet
     responseTimes: [],
     alertsToday: Math.floor(Math.random() * 3) + 4, // Start with random 4-6
-    coveragePercent: 98,
   });
   const [responseTimeFlash, setResponseTimeFlash] = useState(false);
   const dispatchStartTime = useRef<number | null>(null);
@@ -62,35 +61,21 @@ function App() {
     addLogEntry('system', `System online - ${activeDrones} drones active`);
   }, [addLogEntry]);
 
-  // Show first alert after 5 seconds (internal)
+  // Single alert generation - only when no current alert
   useEffect(() => {
-    const alertTimer = setTimeout(() => {
-      setAlert({ ...scriptedAlert, timestamp: new Date() });
-      addLogEntry('alert', '⚠ ALERT: Perimeter breach detected - Eastern sector');
+    if (alert !== null) return; // Don't generate if alert exists
+
+    const delay = alertResolved ? 8000 : 5000; // Longer delay after resolution
+    const timer = setTimeout(() => {
+      const newAlert = generateAlert();
+      setAlert(newAlert);
+      setAlertResolved(false);
+      addLogEntry('alert', `⚠ ALERT: ${newAlert.type.replace(/_/g, ' ')} - ${newAlert.locationName}`);
       setMetrics(prev => ({ ...prev, alertsToday: prev.alertsToday + 1 }));
-    }, 5000);
+    }, delay);
 
-    return () => clearTimeout(alertTimer);
-  }, [addLogEntry]);
-
-  // Show external alert after 15 seconds
-  useEffect(() => {
-    const externalAlertTimer = setTimeout(() => {
-      setAlert({ ...externalAlert, timestamp: new Date() });
-      addLogEntry('alert', '⚠ EXTERNAL THREAT: Unauthorized vehicle outside perimeter');
-      setMetrics(prev => ({ ...prev, alertsToday: prev.alertsToday + 1 }));
-      // Reset responding state for new alert
-      setRespondingDroneId(null);
-      setDroneArrived(false);
-      setDispatchStatus('idle');
-      // Reset any responding drones back to patrolling
-      setDrones(prev => prev.map(d =>
-        d.status === 'responding' ? { ...d, status: 'patrolling' as const, speed: 12 } : d
-      ));
-    }, 15000);
-
-    return () => clearTimeout(externalAlertTimer);
-  }, [addLogEntry]);
+    return () => clearTimeout(timer);
+  }, [alert, alertResolved, addLogEntry]);
 
   // Patrol logging every 10 seconds
   useEffect(() => {
@@ -133,12 +118,8 @@ function App() {
                 setDroneArrived(true);
                 setDispatchStatus('on_scene');
                 setTimeout(() => {
-                  addLogEntry('arrival', `${drone.id} on scene - investigating`);
+                  addLogEntry('arrival', `${drone.id} on scene at ${alert.locationName} - investigating`);
                 }, 0);
-                // Clear status after 2 seconds
-                setTimeout(() => {
-                  setDispatchStatus('idle');
-                }, 2000);
 
                 // Calculate response time
                 if (dispatchStartTime.current) {
@@ -157,6 +138,19 @@ function App() {
                   setTimeout(() => setResponseTimeFlash(false), 1000);
                   dispatchStartTime.current = null;
                 }
+
+                // Clear alert after drone arrives (with small delay)
+                setTimeout(() => {
+                  setAlert(null);
+                  setAlertResolved(true);
+                  setRespondingDroneId(null);
+                  setDispatchStatus('idle');
+                  setDroneArrived(false);
+                  // Return drone to patrolling
+                  setDrones(prev => prev.map(d =>
+                    d.id === drone.id ? { ...d, status: 'returning' as const, speed: 15 } : d
+                  ));
+                }, 2000);
               }
               return {
                 ...drone,
@@ -231,23 +225,22 @@ function App() {
     return () => clearInterval(interval);
   }, [alert, droneArrived, addLogEntry]);
 
-  // Handle dispatch
-  const handleDispatch = (droneId: string) => {
+  // Handle dispatch - supports both nearest and specific drone
+  const handleDispatch = (droneId: string, isManual: boolean = false) => {
     const drone = drones.find(d => d.id === droneId);
-    const isExternal = alert ? !isInsideGeofence(alert.lat, alert.lng) : false;
 
-    if (drone) {
-      if (isExternal) {
-        addLogEntry('dispatch', `⚠ ${drone.id} responding to external perimeter alert`);
+    if (drone && alert) {
+      if (isManual) {
+        addLogEntry('dispatch', `${drone.id} manually dispatched to ${alert.locationName}`);
       } else {
-        addLogEntry('dispatch', `${drone.id} dispatched to alert location`);
+        addLogEntry('dispatch', `${drone.id} dispatched to ${alert.locationName}`);
       }
     }
 
     setRespondingDroneId(droneId);
     setDispatchStatus('en_route');
-    setDroneArrived(false); // Reset for new dispatch
-    dispatchStartTime.current = Date.now(); // Record start time for response calculation
+    setDroneArrived(false);
+    dispatchStartTime.current = Date.now();
 
     setDrones(prevDrones =>
       prevDrones.map(drone => {
@@ -265,75 +258,76 @@ function App() {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-[#0a0a12] overflow-hidden">
-      {/* Metrics Bar - Top */}
+      {/* Metrics Bar - Top - Full width */}
       <MetricsBar metrics={metrics} responseTimeFlash={responseTimeFlash} />
 
-      {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Map Section - Takes up most of the screen */}
-        <div className="flex-1 relative">
-        {/* Top bar */}
-        <div className="absolute top-0 left-0 right-0 z-[1000] bg-gradient-to-b from-[#0a0a12] to-transparent p-4 pointer-events-none">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 pointer-events-auto">
-              <div className="flex items-center gap-2 bg-[#1a1a2e]/90 backdrop-blur px-4 py-2 rounded-lg border border-gray-800">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                <span className="text-green-400 text-sm font-medium">LIVE</span>
+      {/* Main Content - Responsive layout */}
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+        {/* Map Section - Full width on mobile, 70% on desktop */}
+        <div className="h-[50vh] lg:h-full lg:flex-1 relative">
+          {/* Top bar overlay */}
+          <div className="absolute top-0 left-0 right-0 z-[1000] bg-gradient-to-b from-[#0a0a12] to-transparent p-2 lg:p-4 pointer-events-none">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 pointer-events-auto">
+                <div className="flex items-center gap-2 bg-[#1a1a2e]/90 backdrop-blur px-3 py-1.5 lg:px-4 lg:py-2 rounded-lg border border-gray-800">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  <span className="text-green-400 text-xs lg:text-sm font-medium">LIVE</span>
+                </div>
+                <div className="hidden sm:block bg-[#1a1a2e]/90 backdrop-blur px-3 py-1.5 lg:px-4 lg:py-2 rounded-lg border border-gray-800">
+                  <span className="text-gray-400 text-xs lg:text-sm">
+                    {drones.filter(d => d.status === 'patrolling').length} Patrolling |{' '}
+                    {drones.filter(d => d.status === 'responding').length} Responding |{' '}
+                    {drones.filter(d => d.status === 'idle').length} Idle
+                  </span>
+                </div>
               </div>
-              <div className="bg-[#1a1a2e]/90 backdrop-blur px-4 py-2 rounded-lg border border-gray-800">
-                <span className="text-gray-400 text-sm">
-                  {drones.filter(d => d.status === 'patrolling').length} Patrolling |{' '}
-                  {drones.filter(d => d.status === 'responding').length} Responding |{' '}
-                  {drones.filter(d => d.status === 'idle').length} Idle
-                </span>
-              </div>
-            </div>
 
-            <div className="bg-[#1a1a2e]/90 backdrop-blur px-4 py-2 rounded-lg border border-gray-800 pointer-events-auto">
-              <span className="text-gray-400 text-sm">
-                {new Date().toLocaleTimeString()}
-              </span>
-              <span className="text-gray-600 text-xs ml-2">{BUILD_VERSION}</span>
+              <div className="bg-[#1a1a2e]/90 backdrop-blur px-3 py-1.5 lg:px-4 lg:py-2 rounded-lg border border-gray-800 pointer-events-auto">
+                <span className="text-gray-400 text-xs lg:text-sm">
+                  {new Date().toLocaleTimeString()}
+                </span>
+                <span className="hidden sm:inline text-gray-600 text-xs ml-2">{BUILD_VERSION}</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Alert Banner */}
-        {alert && !respondingDroneId && (
-          <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[1000] animate-pulse">
-            <div className="bg-red-600/90 backdrop-blur text-white px-6 py-3 rounded-lg shadow-lg shadow-red-600/30 border border-red-500">
-              <div className="flex items-center gap-3">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <div>
-                  <div className="font-bold text-sm">PERIMETER BREACH DETECTED</div>
-                  <div className="text-red-200 text-xs">Eastern sector - Click alert or panel to dispatch</div>
+          {/* Alert Banner - Responsive */}
+          {alert && !respondingDroneId && (
+            <div className="absolute top-14 lg:top-20 left-1/2 -translate-x-1/2 z-[1000] animate-pulse w-[90%] sm:w-auto">
+              <div className="bg-red-600/90 backdrop-blur text-white px-4 py-2 lg:px-6 lg:py-3 rounded-lg shadow-lg shadow-red-600/30 border border-red-500">
+                <div className="flex items-center gap-2 lg:gap-3">
+                  <svg className="w-5 h-5 lg:w-6 lg:h-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <div className="min-w-0">
+                    <div className="font-bold text-xs lg:text-sm truncate">{alert.type.replace(/_/g, ' ').toUpperCase()}</div>
+                    <div className="text-red-200 text-xs truncate">{alert.locationName} - Dispatch drone</div>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Map */}
-        <DroneMap
-          drones={drones}
-          alert={alert}
-          onDispatch={handleDispatch}
-        />
-      </div>
-
-      {/* Status Panel + Activity Log - Right side */}
-      <div className="w-80 h-full flex flex-col">
-        <div className="flex-1 overflow-hidden">
-          <StatusPanel
+          {/* Map */}
+          <DroneMap
             drones={drones}
             alert={alert}
-            onDispatch={handleDispatch}
-            dispatchStatus={dispatchStatus}
+            onDispatch={(droneId) => handleDispatch(droneId, false)}
           />
         </div>
-        <ActivityLog entries={logEntries} />
+
+        {/* Status Panel + Activity Log - Full width on mobile, 30% on desktop */}
+        <div className="flex-1 lg:flex-none lg:w-80 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-hidden min-h-0">
+            <StatusPanel
+              drones={drones}
+              alert={alert}
+              onDispatch={(droneId) => handleDispatch(droneId, false)}
+              onDispatchManual={(droneId) => handleDispatch(droneId, true)}
+              dispatchStatus={dispatchStatus}
+            />
+          </div>
+          <ActivityLog entries={logEntries} />
         </div>
       </div>
     </div>
