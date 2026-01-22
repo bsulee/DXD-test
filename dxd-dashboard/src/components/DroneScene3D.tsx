@@ -349,75 +349,65 @@ function AlertMarker({ alert, buildings }: { alert: Alert; buildings: OSMBuildin
   );
 }
 
-// Stylized campus ground with walkways, roads, and grass
+// Realistic campus ground with desert landscaping
 function Ground() {
   return (
     <group>
-      {/* Base ground - campus grass green */}
+      {/* Base ground - desert/tan color like Arizona */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]} receiveShadow>
-        <planeGeometry args={[300, 300]} />
-        <meshStandardMaterial color="#4a6741" />
+        <planeGeometry args={[400, 400]} />
+        <meshStandardMaterial color="#C4A77D" />
       </mesh>
 
-      {/* North-South walkways */}
-      {[-60, -30, 0, 30, 60].map((xPos, i) => (
-        <mesh key={`ns-${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[xPos, 0.01, 0]}>
-          <planeGeometry args={[2.5, 200]} />
-          <meshStandardMaterial color="#c4b5a0" />
-        </mesh>
-      ))}
-
-      {/* East-West walkways */}
-      {[-60, -30, 0, 30, 60].map((zPos, i) => (
-        <mesh key={`ew-${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, zPos]}>
-          <planeGeometry args={[200, 2.5]} />
-          <meshStandardMaterial color="#c4b5a0" />
-        </mesh>
-      ))}
-
-      {/* Main perimeter roads */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 90]}>
-        <planeGeometry args={[200, 5]} />
-        <meshStandardMaterial color="#444444" />
+      {/* Main roads - University Drive (E-W) */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, -85]}>
+        <planeGeometry args={[350, 8]} />
+        <meshStandardMaterial color="#3a3a3a" />
       </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, -90]}>
-        <planeGeometry args={[200, 5]} />
-        <meshStandardMaterial color="#444444" />
+      {/* Rural Road (N-S) */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[85, 0.02, 0]}>
+        <planeGeometry args={[8, 300]} />
+        <meshStandardMaterial color="#3a3a3a" />
       </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[90, 0.02, 0]}>
-        <planeGeometry args={[5, 180]} />
-        <meshStandardMaterial color="#444444" />
+      {/* Mill Avenue (N-S) */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-70, 0.02, 0]}>
+        <planeGeometry args={[8, 300]} />
+        <meshStandardMaterial color="#3a3a3a" />
       </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-90, 0.02, 0]}>
-        <planeGeometry args={[5, 180]} />
-        <meshStandardMaterial color="#444444" />
+      {/* Apache Blvd (E-W) */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 85]}>
+        <planeGeometry args={[350, 8]} />
+        <meshStandardMaterial color="#3a3a3a" />
       </mesh>
 
-      {/* Grass quad areas between buildings */}
+      {/* Campus walkways - lighter concrete color */}
       {[
-        { x: -45, z: -45 },
-        { x: 45, z: -45 },
-        { x: -45, z: 45 },
-        { x: 45, z: 45 },
-        { x: 0, z: 0 },
-        { x: -15, z: 15 },
-        { x: 15, z: -15 },
-      ].map((pos, i) => (
-        <mesh key={`quad-${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[pos.x, 0.015, pos.z]}>
-          <planeGeometry args={[18, 18]} />
-          <meshStandardMaterial color="#5a7a51" />
+        { x: 0, z: 0, w: 3, h: 180 },      // Main N-S walkway
+        { x: -35, z: 0, w: 2.5, h: 150 },  // Secondary N-S
+        { x: 35, z: 0, w: 2.5, h: 150 },   // Secondary N-S
+        { x: 0, z: -40, w: 150, h: 2.5 },  // Main E-W walkway
+        { x: 0, z: 20, w: 120, h: 2.5 },   // Central E-W
+        { x: 0, z: 50, w: 100, h: 2.5 },   // North E-W
+      ].map((path, i) => (
+        <mesh key={`walk-${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[path.x, 0.01, path.z]}>
+          <planeGeometry args={[path.w, path.h]} />
+          <meshStandardMaterial color="#d4c4a8" />
         </mesh>
       ))}
 
-      {/* Plaza areas */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-15, 0.02, -45]}>
-        <planeGeometry args={[25, 20]} />
-        <meshStandardMaterial color="#b8a892" />
-      </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[20, 0.02, 30]}>
-        <planeGeometry args={[20, 15]} />
-        <meshStandardMaterial color="#b8a892" />
-      </mesh>
+      {/* Grassy areas - muted desert lawn green */}
+      {[
+        { x: -20, z: -20, w: 25, h: 25 },  // Central quad
+        { x: 20, z: -20, w: 20, h: 20 },
+        { x: -45, z: 30, w: 18, h: 22 },
+        { x: 45, z: -50, w: 22, h: 18 },
+        { x: 0, z: 60, w: 30, h: 20 },
+      ].map((grass, i) => (
+        <mesh key={`grass-${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[grass.x, 0.005, grass.z]}>
+          <planeGeometry args={[grass.w, grass.h]} />
+          <meshStandardMaterial color="#6B8E5E" />
+        </mesh>
+      ))}
     </group>
   );
 }
