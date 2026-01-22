@@ -45,6 +45,32 @@ function lerp(start: number, end: number, factor: number): number {
   return start + (end - start) * factor;
 }
 
+// Hook for smooth altitude transitions (takeoff/landing)
+function useSmoothAltitude(
+  targetAltitude: number,
+  speed: number = 0.08
+): { altitude: number; isTransitioning: boolean } {
+  const [currentAltitude, setCurrentAltitude] = useState(targetAltitude);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentAltitude(current => {
+        const diff = targetAltitude - current;
+        const transitioning = Math.abs(diff) > 0.5;
+        setIsTransitioning(transitioning);
+
+        if (Math.abs(diff) < 0.1) return targetAltitude;
+        return current + diff * speed;
+      });
+    }, 16);
+
+    return () => clearInterval(interval);
+  }, [targetAltitude, speed]);
+
+  return { altitude: currentAltitude, isTransitioning };
+}
+
 // Hook for smooth drone position with velocity tracking
 function useSmoothPosition(
   targetLat: number,
@@ -78,7 +104,7 @@ function useSmoothPosition(
   return { smoothPos, velocity };
 }
 
-// Drone 3D model with smooth movement and physics-based tilt
+// Drone 3D model with smooth movement, takeoff/landing, and physics-based tilt
 function DroneMarker({
   drone,
   isNearest,
@@ -102,9 +128,20 @@ function DroneMarker({
 
   // Check if drone should be landed on a building
   const landingPad = landingPads[drone.id];
-  const isLanded = drone.status === 'idle' && landingPad;
+  const shouldBeLanded = drone.status === 'idle' && landingPad;
 
-  // Color based on status - gray when landed
+  // Target altitude based on status
+  const targetAltitude = shouldBeLanded
+    ? landingPad.buildingHeight + 1  // On rooftop
+    : 15;                             // Flying height
+
+  // Smooth altitude transition for takeoff/landing
+  const { altitude: currentAltitude, isTransitioning } = useSmoothAltitude(targetAltitude, 0.06);
+
+  // Is actually on the ground (within 0.5 of landing height)?
+  const isLanded = shouldBeLanded && Math.abs(currentAltitude - (landingPad.buildingHeight + 1)) < 0.5;
+
+  // Color based on status
   const color = isLanded
     ? '#6b7280'
     : statusColors[drone.status];
@@ -112,21 +149,25 @@ function DroneMarker({
   // Animation frame for hover and tilt
   useFrame((state) => {
     if (groupRef.current) {
-      // Update position smoothly
+      // Update horizontal position smoothly
       groupRef.current.position.x = x;
       groupRef.current.position.z = z;
 
-      if (isLanded) {
-        // Landed on building: no hover, no tilt, sitting on rooftop
-        groupRef.current.position.y = landingPad.buildingHeight + 1;
-        groupRef.current.rotation.x = 0;
-        groupRef.current.rotation.z = 0;
-        groupRef.current.rotation.y = 0;
-      } else {
-        // Flying: hover animation and tilt
-        groupRef.current.position.y = 12 + Math.sin(state.clock.elapsedTime * 2 + drone.id.charCodeAt(4)) * 0.3;
+      // Update vertical position with smooth altitude + hover
+      const hoverOffset = isLanded ? 0 : Math.sin(state.clock.elapsedTime * 2 + drone.id.charCodeAt(4)) * 0.3;
+      groupRef.current.position.y = currentAltitude + hoverOffset;
 
-        // Tilt based on velocity (lean into movement)
+      if (isLanded) {
+        // Landed on building: no tilt
+        groupRef.current.rotation.x = lerp(groupRef.current.rotation.x, 0, 0.1);
+        groupRef.current.rotation.z = lerp(groupRef.current.rotation.z, 0, 0.1);
+        groupRef.current.rotation.y = lerp(groupRef.current.rotation.y, 0, 0.05);
+      } else if (isTransitioning) {
+        // Taking off or landing: slight wobble, level out
+        groupRef.current.rotation.x = lerp(groupRef.current.rotation.x, 0, 0.1) + Math.sin(state.clock.elapsedTime * 8) * 0.03;
+        groupRef.current.rotation.z = lerp(groupRef.current.rotation.z, 0, 0.1) + Math.cos(state.clock.elapsedTime * 8) * 0.03;
+      } else {
+        // Flying: tilt based on velocity (lean into movement)
         const tiltX = velocity.z * 0.15;
         const tiltZ = -velocity.x * 0.15;
 
@@ -148,15 +189,16 @@ function DroneMarker({
     }
 
     // Slow rotation for the body when stationary and flying
-    if (bodyRef.current && !isLanded && Math.abs(velocity.x) < 0.05 && Math.abs(velocity.z) < 0.05) {
+    if (bodyRef.current && !isLanded && !isTransitioning && Math.abs(velocity.x) < 0.05 && Math.abs(velocity.z) < 0.05) {
       bodyRef.current.rotation.y += 0.01;
     }
   });
 
-  const initialY = isLanded ? landingPad.buildingHeight + 1 : 12;
+  // Distance from ground for ground-based effects
+  const distanceFromGround = currentAltitude;
 
   return (
-    <group ref={groupRef} position={[x, initialY, z]}>
+    <group ref={groupRef} position={[x, currentAltitude, z]}>
       {/* Drone body - hexagonal shape */}
       <mesh ref={bodyRef} onClick={onClick}>
         <cylinderGeometry args={[0.8, 1, 1.5, 6]} />
@@ -171,12 +213,20 @@ function DroneMarker({
         </mesh>
       ))}
 
+      {/* Rotor blur effect - visible when flying or transitioning */}
+      {(!isLanded || isTransitioning) && [[0.9, 0.9], [-0.9, 0.9], [0.9, -0.9], [-0.9, -0.9]].map(([rx, rz], i) => (
+        <mesh key={`blur-${i}`} position={[rx, 0.25, rz]} rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[0.5, 16]} />
+          <meshBasicMaterial color="#888" transparent opacity={isTransitioning ? 0.5 : 0.3} />
+        </mesh>
+      ))}
+
       {/* Center light */}
       <pointLight position={[0, 0, 0]} color={color} intensity={2} distance={8} />
 
-      {/* Coverage circle on ground - only for flying drones */}
+      {/* Coverage circle on ground - only for flying drones, scaled by altitude */}
       {!isLanded && (
-        <mesh position={[0, -11.9, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <mesh position={[0, -distanceFromGround + 0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[0, 4, 32]} />
           <meshBasicMaterial color={color} transparent opacity={0.15} />
         </mesh>
@@ -184,7 +234,7 @@ function DroneMarker({
 
       {/* Selection/nearest indicator */}
       {isNearest && (
-        <mesh position={[0, isLanded ? -landingPad.buildingHeight : -11.8, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <mesh position={[0, -distanceFromGround + 0.2, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[1.5, 2, 32]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0.6} />
         </mesh>
@@ -196,11 +246,11 @@ function DroneMarker({
         <meshBasicMaterial color={color} />
       </mesh>
 
-      {/* Landing pad indicator for grounded drones */}
-      {isLanded && (
-        <mesh position={[0, -0.8, 0]}>
-          <cylinderGeometry args={[1, 1, 0.1, 16]} />
-          <meshStandardMaterial color="#333" />
+      {/* Landing pad indicator - always on the building for drones with landing pads */}
+      {landingPad && (
+        <mesh position={[0, landingPad.buildingHeight + 0.15 - currentAltitude, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.8, 1.2, 16]} />
+          <meshBasicMaterial color={isLanded ? '#444' : '#666'} transparent opacity={isLanded ? 0.8 : 0.4} />
         </mesh>
       )}
     </group>
@@ -278,30 +328,74 @@ function AlertMarker({ alert }: { alert: Alert }) {
   );
 }
 
-// Ground plane with better contrast
+// Stylized campus ground with walkways, roads, and grass
 function Ground() {
   return (
     <group>
-      {/* Main ground plane - lighter color for contrast */}
+      {/* Base ground - campus grass green */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]} receiveShadow>
         <planeGeometry args={[300, 300]} />
-        <meshStandardMaterial color="#3d5c3d" />
+        <meshStandardMaterial color="#4a6741" />
       </mesh>
 
-      {/* Subtle grid for reference */}
-      <gridHelper
-        args={[300, 60, '#4a6b4a', '#4a6b4a']}
-        position={[0, 0.01, 0]}
-      />
+      {/* North-South walkways */}
+      {[-60, -30, 0, 30, 60].map((xPos, i) => (
+        <mesh key={`ns-${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[xPos, 0.01, 0]}>
+          <planeGeometry args={[2.5, 200]} />
+          <meshStandardMaterial color="#c4b5a0" />
+        </mesh>
+      ))}
 
-      {/* Main roads */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-        <planeGeometry args={[4, 300]} />
-        <meshStandardMaterial color="#555555" />
+      {/* East-West walkways */}
+      {[-60, -30, 0, 30, 60].map((zPos, i) => (
+        <mesh key={`ew-${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, zPos]}>
+          <planeGeometry args={[200, 2.5]} />
+          <meshStandardMaterial color="#c4b5a0" />
+        </mesh>
+      ))}
+
+      {/* Main perimeter roads */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 90]}>
+        <planeGeometry args={[200, 5]} />
+        <meshStandardMaterial color="#444444" />
       </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-        <planeGeometry args={[300, 4]} />
-        <meshStandardMaterial color="#555555" />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, -90]}>
+        <planeGeometry args={[200, 5]} />
+        <meshStandardMaterial color="#444444" />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[90, 0.02, 0]}>
+        <planeGeometry args={[5, 180]} />
+        <meshStandardMaterial color="#444444" />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-90, 0.02, 0]}>
+        <planeGeometry args={[5, 180]} />
+        <meshStandardMaterial color="#444444" />
+      </mesh>
+
+      {/* Grass quad areas between buildings */}
+      {[
+        { x: -45, z: -45 },
+        { x: 45, z: -45 },
+        { x: -45, z: 45 },
+        { x: 45, z: 45 },
+        { x: 0, z: 0 },
+        { x: -15, z: 15 },
+        { x: 15, z: -15 },
+      ].map((pos, i) => (
+        <mesh key={`quad-${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[pos.x, 0.015, pos.z]}>
+          <planeGeometry args={[18, 18]} />
+          <meshStandardMaterial color="#5a7a51" />
+        </mesh>
+      ))}
+
+      {/* Plaza areas */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-15, 0.02, -45]}>
+        <planeGeometry args={[25, 20]} />
+        <meshStandardMaterial color="#b8a892" />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[20, 0.02, 30]}>
+        <planeGeometry args={[20, 15]} />
+        <meshStandardMaterial color="#b8a892" />
       </mesh>
     </group>
   );
