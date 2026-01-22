@@ -301,10 +301,10 @@ function AlertMarker({ alert, buildings }: { alert: Alert; buildings: OSMBuildin
 
   return (
     <group position={[x, 0, z]}>
-      {/* Vertical light beam from ground to sky */}
-      <mesh ref={beamRef} position={[0, 25, 0]}>
-        <cylinderGeometry args={[0.5, 2, 50, 8]} />
-        <meshBasicMaterial color="#ff0000" transparent opacity={0.4} />
+      {/* Vertical light beam - taller and brighter */}
+      <mesh ref={beamRef} position={[0, 50, 0]}>
+        <cylinderGeometry args={[0.3, 1.5, 100, 8]} />
+        <meshBasicMaterial color="#ff0000" transparent opacity={0.5} />
       </mesh>
 
       {/* Floating alert sphere above building */}
@@ -313,14 +313,14 @@ function AlertMarker({ alert, buildings }: { alert: Alert; buildings: OSMBuildin
         <meshStandardMaterial
           color="#ff0000"
           emissive="#ff0000"
-          emissiveIntensity={0.8}
+          emissiveIntensity={1}
           transparent
           opacity={0.9}
         />
       </mesh>
 
-      {/* Alert light */}
-      <pointLight position={[0, alertHeight, 0]} color="#ff0000" intensity={8} distance={30} />
+      {/* Alert light - stronger */}
+      <pointLight position={[0, alertHeight, 0]} color="#ff0000" intensity={12} distance={40} />
 
       {/* Ground ring */}
       <mesh position={[0, 0.2, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -333,6 +333,18 @@ function AlertMarker({ alert, buildings }: { alert: Alert; buildings: OSMBuildin
         <ringGeometry args={[5, 7, 32]} />
         <meshBasicMaterial color="#ff0000" transparent opacity={0.3} />
       </mesh>
+
+      {/* Additional pulsing rings at base */}
+      {[1, 2, 3].map((_, i) => (
+        <mesh
+          key={i}
+          position={[0, 0.15 + i * 0.05, 0]}
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
+          <ringGeometry args={[7 + i * 2, 8 + i * 2, 32]} />
+          <meshBasicMaterial color="#ff0000" transparent opacity={0.15 - i * 0.04} />
+        </mesh>
+      ))}
     </group>
   );
 }
@@ -410,35 +422,48 @@ function Ground() {
   );
 }
 
-// Geofence boundary visualization
+// Geofence boundary visualization - more visible
 function Geofence() {
-  // Create points for the boundary line
+  // Create points for the boundary line - raised higher
   const linePoints: [number, number, number][] = geofenceBoundary.map(([lat, lng]) => {
     const { x, z } = toXZ(lat, lng);
-    return [x, 0.3, z] as [number, number, number];
+    return [x, 2, z] as [number, number, number];
   });
   // Close the loop
   const firstPoint = linePoints[0];
   linePoints.push(firstPoint);
 
-  // Create vertical posts at corners
+  // Create vertical posts at corners - taller and brighter
   const posts = geofenceBoundary.map(([lat, lng], i) => {
     const { x, z } = toXZ(lat, lng);
     return (
-      <mesh key={i} position={[x, 2, z]}>
-        <cylinderGeometry args={[0.15, 0.15, 4, 8]} />
-        <meshStandardMaterial color="#dc2626" emissive="#dc2626" emissiveIntensity={0.3} />
-      </mesh>
+      <group key={i}>
+        <mesh position={[x, 5, z]}>
+          <cylinderGeometry args={[0.3, 0.3, 10, 8]} />
+          <meshStandardMaterial color="#ff3333" emissive="#ff0000" emissiveIntensity={0.5} />
+        </mesh>
+        {/* Top light on post */}
+        <pointLight position={[x, 10, z]} color="#ff3333" intensity={2} distance={15} />
+      </group>
     );
   });
 
   return (
     <group>
-      {/* Boundary line using drei Line */}
+      {/* Main boundary line */}
       <Line
         points={linePoints}
-        color="#dc2626"
-        lineWidth={2}
+        color="#ff3333"
+        lineWidth={3}
+      />
+
+      {/* Glow line slightly larger */}
+      <Line
+        points={linePoints.map(([x, y, z]) => [x, y + 0.1, z] as [number, number, number])}
+        color="#ff0000"
+        lineWidth={1}
+        transparent
+        opacity={0.5}
       />
 
       {/* Corner posts */}
@@ -450,7 +475,7 @@ function Geofence() {
           Math.abs(toXZ(0, geofenceBoundary[0][1]).x - toXZ(0, geofenceBoundary[1][1]).x),
           Math.abs(toXZ(geofenceBoundary[0][0], 0).z - toXZ(geofenceBoundary[2][0], 0).z)
         ]} />
-        <meshBasicMaterial color="#dc2626" transparent opacity={0.05} />
+        <meshBasicMaterial color="#ff3333" transparent opacity={0.03} />
       </mesh>
     </group>
   );
@@ -673,21 +698,22 @@ export default function DroneScene3D({
       </div>
 
       <Canvas
-        camera={{ position: [0, 60, 80], fov: 50 }}
-        style={{ background: '#1a1a2e' }}
+        camera={{ position: [0, 120, 150], fov: 45 }}
+        style={{ background: '#0a0a12' }}
+        gl={{ antialias: true }}
       >
-        {/* Lighting */}
-        <ambientLight intensity={0.5} />
+        {/* Lighting - brighter and more even */}
+        <ambientLight intensity={0.6} />
         <directionalLight
-          position={[50, 100, 50]}
-          intensity={1}
+          position={[100, 150, 100]}
+          intensity={1.2}
           castShadow
         />
-        <directionalLight position={[-30, 50, -30]} intensity={0.3} />
-        <hemisphereLight args={['#87CEEB', '#4a6741', 0.3]} />
+        <directionalLight position={[-50, 100, -50]} intensity={0.4} />
+        <hemisphereLight args={['#b1e1ff', '#4a6741', 0.4]} />
 
-        {/* Fog for atmosphere */}
-        <fog attach="fog" args={['#1a1a2e', 60, 180]} />
+        {/* Subtle ground grid for scale reference */}
+        <gridHelper args={[400, 80, '#1a2a1a', '#1a2a1a']} position={[0, 0.02, 0]} />
 
         {/* Scene elements */}
         <Ground />
@@ -718,13 +744,15 @@ export default function DroneScene3D({
 
         {/* Camera controls */}
         <OrbitControls
-          maxPolarAngle={Math.PI / 2.2}
-          minPolarAngle={Math.PI / 6}
-          minDistance={15}
-          maxDistance={150}
+          maxPolarAngle={Math.PI / 2.1}
+          minPolarAngle={Math.PI / 8}
+          minDistance={50}
+          maxDistance={400}
           enablePan={true}
           panSpeed={0.5}
           rotateSpeed={0.5}
+          enableDamping={true}
+          dampingFactor={0.05}
           target={[0, 0, 0]}
         />
       </Canvas>

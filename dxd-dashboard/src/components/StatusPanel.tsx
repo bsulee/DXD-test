@@ -25,7 +25,7 @@ function BatteryIndicator({ level }: { level: number }) {
           style={{ width: `${level}%` }}
         />
       </div>
-      <span className="text-xs text-gray-400 w-8">{level}%</span>
+      <span className="text-xs text-gray-400 w-8">{Math.round(level)}%</span>
     </div>
   );
 }
@@ -195,7 +195,7 @@ export default function StatusPanel({ drones, alert, onDispatch, onDispatchManua
                     <div className="flex items-center gap-2">
                       {drone.speed > 0 && (
                         <span className="text-xs text-gray-400">
-                          {drone.speed} km/h
+                          {Math.round(drone.speed)} km/h
                         </span>
                       )}
                       {canDispatch && (
