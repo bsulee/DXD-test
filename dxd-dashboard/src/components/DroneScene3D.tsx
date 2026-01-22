@@ -4,27 +4,32 @@ import { OrbitControls, Line } from '@react-three/drei';
 import * as THREE from 'three';
 import type { Drone, Alert } from '../data/mockData';
 import { geofenceBoundary, statusColors, mapCenter } from '../data/mockData';
-import { campusBuildings } from '../data/buildings';
-import type { Building } from '../data/buildings';
+import { useBuildings } from '../hooks/useBuildings';
+import type { OSMBuilding } from '../data/fetchOSMBuildings';
+import type { SentryTower } from '../data/sentryTowers';
 
 interface DroneScene3DProps {
   drones: Drone[];
   alert: Alert | null;
   onDispatch: (droneId: string) => void;
+  sentryTowers: SentryTower[];
 }
 
-// Landing pads for idle drones (on top of buildings) - updated to new campus positions
+// Scale factor for converting real-world meters to scene units
+const SCENE_SCALE = 0.12;
+
+// Landing pads for idle drones (on top of buildings)
 const landingPads: Record<string, { lat: number; lng: number; buildingHeight: number; buildingName: string }> = {
   'DXD-002': {
-    lat: 33.4197,      // Hayden Library position
+    lat: 33.4197,
     lng: -111.9342,
-    buildingHeight: 8,
+    buildingHeight: 12 * SCENE_SCALE, // Hayden Library
     buildingName: 'Hayden Library',
   },
   'DXD-004': {
-    lat: 33.4178,      // Memorial Union position
+    lat: 33.4178,
     lng: -111.9362,
-    buildingHeight: 6,
+    buildingHeight: 10 * SCENE_SCALE, // Memorial Union
     buildingName: 'Memorial Union',
   },
 };
@@ -33,10 +38,14 @@ const landingPads: Record<string, { lat: number; lng: number; buildingHeight: nu
 function toXZ(lat: number, lng: number) {
   const centerLat = mapCenter[0];
   const centerLng = mapCenter[1];
-  const scale = 8000;
+
+  // More accurate conversion using meters
+  const latToMeters = 111000;
+  const lonToMeters = 111000 * Math.cos(centerLat * Math.PI / 180);
+
   return {
-    x: (lng - centerLng) * scale,
-    z: -(lat - centerLat) * scale, // Negative so north is "forward"
+    x: (lng - centerLng) * lonToMeters * SCENE_SCALE,
+    z: -(lat - centerLat) * latToMeters * SCENE_SCALE,
   };
 }
 
@@ -258,22 +267,22 @@ function DroneMarker({
 }
 
 // Alert marker with light beam that goes above buildings
-function AlertMarker({ alert }: { alert: Alert }) {
+function AlertMarker({ alert, buildings }: { alert: Alert; buildings: OSMBuilding[] }) {
   const pulseRef = useRef<THREE.Mesh>(null);
   const beamRef = useRef<THREE.Mesh>(null);
   const ringRef = useRef<THREE.Mesh>(null);
   const { x, z } = toXZ(alert.lat, alert.lng);
 
   // Find if alert is near a building to position above it
-  const nearbyBuilding = campusBuildings.find(b => {
+  const nearbyBuilding = buildings.find(b => {
     const dist = Math.sqrt(
-      Math.pow(b.position.lat - alert.lat, 2) +
-      Math.pow(b.position.lng - alert.lng, 2)
+      Math.pow(b.lat - alert.lat, 2) +
+      Math.pow(b.lng - alert.lng, 2)
     );
-    return dist < 0.0008;
+    return dist < 0.0003;
   });
 
-  const alertHeight = nearbyBuilding ? nearbyBuilding.height + 5 : 8;
+  const alertHeight = nearbyBuilding ? nearbyBuilding.height * SCENE_SCALE + 3 : 5;
 
   // Pulse animation
   useFrame((state) => {
@@ -447,10 +456,15 @@ function Geofence() {
   );
 }
 
-// Building mesh component with alert highlighting
-function BuildingMesh({ building, isAlertActive }: { building: Building; isAlertActive: boolean }) {
+// OSM Building mesh component with alert highlighting
+function OSMBuildingMesh({ building, isAlertActive }: { building: OSMBuilding; isAlertActive: boolean }) {
   const meshRef = useRef<THREE.Mesh>(null);
-  const { x, z } = toXZ(building.position.lat, building.position.lng);
+  const { x, z } = toXZ(building.lat, building.lng);
+
+  // Scale building dimensions
+  const width = building.width * SCENE_SCALE;
+  const depth = building.depth * SCENE_SCALE;
+  const height = building.height * SCENE_SCALE;
 
   // Pulse effect when alert is active at this building
   useFrame((state) => {
@@ -463,11 +477,11 @@ function BuildingMesh({ building, isAlertActive }: { building: Building; isAlert
   return (
     <mesh
       ref={meshRef}
-      position={[x, building.height / 2, z]}
+      position={[x, height / 2, z]}
       castShadow
       receiveShadow
     >
-      <boxGeometry args={[building.width, building.height, building.depth]} />
+      <boxGeometry args={[width, height, depth]} />
       <meshStandardMaterial
         color={isAlertActive ? '#ff4444' : building.color}
         emissive={isAlertActive ? '#ff0000' : '#000000'}
@@ -477,20 +491,26 @@ function BuildingMesh({ building, isAlertActive }: { building: Building; isAlert
   );
 }
 
-// Campus buildings group with alert checking
-function CampusBuildings({ currentAlert }: { currentAlert: Alert | null }) {
+// Campus buildings group with OSM data
+function CampusBuildings({
+  buildings,
+  currentAlert
+}: {
+  buildings: OSMBuilding[];
+  currentAlert: Alert | null;
+}) {
   return (
     <group>
-      {campusBuildings.map(building => {
+      {buildings.map(building => {
         // Check if this building has an active alert
         const isAlertActive = currentAlert &&
           Math.sqrt(
-            Math.pow(building.position.lat - currentAlert.lat, 2) +
-            Math.pow(building.position.lng - currentAlert.lng, 2)
-          ) < 0.0008;
+            Math.pow(building.lat - currentAlert.lat, 2) +
+            Math.pow(building.lng - currentAlert.lng, 2)
+          ) < 0.0003;
 
         return (
-          <BuildingMesh
+          <OSMBuildingMesh
             key={building.id}
             building={building}
             isAlertActive={!!isAlertActive}
@@ -501,12 +521,119 @@ function CampusBuildings({ currentAlert }: { currentAlert: Alert | null }) {
   );
 }
 
+// Sentry Tower 3D component
+function SentryTowerMesh({ tower }: { tower: SentryTower }) {
+  const groupRef = useRef<THREE.Group>(null);
+  const cameraHeadRef = useRef<THREE.Group>(null);
+  const { x, z } = toXZ(tower.position.lat, tower.position.lng);
+
+  const towerHeight = tower.type === 'elevated' ? 8 : 5;
+  const detectionRadiusScaled = tower.detectionRadius * SCENE_SCALE;
+
+  // Rotation animation for the camera head
+  useFrame((state) => {
+    if (cameraHeadRef.current) {
+      cameraHeadRef.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.5) * 0.8;
+    }
+  });
+
+  // Color based on status
+  const statusColor = tower.status === 'alert'
+    ? '#ff0000'
+    : tower.status === 'active'
+      ? '#00ff00'
+      : '#666666';
+
+  return (
+    <group ref={groupRef} position={[x, 0, z]}>
+      {/* Tower base */}
+      <mesh position={[0, 0.3, 0]}>
+        <cylinderGeometry args={[1, 1.2, 0.6, 8]} />
+        <meshStandardMaterial color="#444444" />
+      </mesh>
+
+      {/* Tower pole */}
+      <mesh position={[0, towerHeight / 2, 0]}>
+        <cylinderGeometry args={[0.2, 0.3, towerHeight, 8]} />
+        <meshStandardMaterial color="#666666" />
+      </mesh>
+
+      {/* Camera platform */}
+      <mesh position={[0, towerHeight, 0]}>
+        <boxGeometry args={[1.2, 0.3, 1.2]} />
+        <meshStandardMaterial color="#333333" />
+      </mesh>
+
+      {/* Camera head (rotates) */}
+      <group ref={cameraHeadRef} position={[0, towerHeight + 0.6, 0]}>
+        {/* Camera body */}
+        <mesh position={[0, 0, 0.3]}>
+          <boxGeometry args={[0.6, 0.5, 0.9]} />
+          <meshStandardMaterial color="#222222" />
+        </mesh>
+
+        {/* Camera lens */}
+        <mesh position={[0, 0, 0.8]} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[0.2, 0.2, 0.2, 16]} />
+          <meshStandardMaterial color="#111111" />
+        </mesh>
+
+        {/* Lens glass */}
+        <mesh position={[0, 0, 0.91]}>
+          <circleGeometry args={[0.15, 16]} />
+          <meshStandardMaterial color="#4444ff" emissive="#4444ff" emissiveIntensity={0.5} />
+        </mesh>
+      </group>
+
+      {/* Status light */}
+      <mesh position={[0, towerHeight + 1.2, 0]}>
+        <sphereGeometry args={[0.2, 16, 16]} />
+        <meshStandardMaterial
+          color={statusColor}
+          emissive={statusColor}
+          emissiveIntensity={tower.status === 'alert' ? 1.5 : 0.8}
+        />
+      </mesh>
+      <pointLight
+        position={[0, towerHeight + 1.2, 0]}
+        color={statusColor}
+        intensity={tower.status === 'alert' ? 3 : 1}
+        distance={5}
+      />
+
+      {/* Detection radius visualization (ground ring) */}
+      <mesh position={[0, 0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[detectionRadiusScaled - 0.3, detectionRadiusScaled, 64]} />
+        <meshBasicMaterial
+          color={statusColor}
+          transparent
+          opacity={tower.status === 'alert' ? 0.4 : 0.2}
+        />
+      </mesh>
+
+      {/* Detection radius fill */}
+      <mesh position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[detectionRadiusScaled, 64]} />
+        <meshBasicMaterial
+          color={statusColor}
+          transparent
+          opacity={tower.status === 'alert' ? 0.1 : 0.03}
+        />
+      </mesh>
+    </group>
+  );
+}
+
 // Main component
 export default function DroneScene3D({
   drones,
   alert,
-  onDispatch
+  onDispatch,
+  sentryTowers
 }: DroneScene3DProps) {
+  // Load buildings from OSM with fallback
+  const { buildings, isLoading, source } = useBuildings();
+
   // Find nearest available drone to alert
   const findNearestDroneId = (): string | null => {
     if (!alert) return null;
@@ -533,11 +660,23 @@ export default function DroneScene3D({
 
   return (
     <div className="w-full h-full relative">
+      {/* Loading indicator */}
+      {isLoading && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded z-10 text-sm">
+          Loading campus data...
+        </div>
+      )}
+
+      {/* Data source indicator */}
+      <div className="absolute bottom-4 left-4 bg-black/50 text-white text-xs px-2 py-1 rounded z-10">
+        Buildings: {source} ({buildings.length})
+      </div>
+
       <Canvas
-        camera={{ position: [0, 80, 100], fov: 50 }}
+        camera={{ position: [0, 60, 80], fov: 50 }}
         style={{ background: '#1a1a2e' }}
       >
-        {/* Better lighting */}
+        {/* Lighting */}
         <ambientLight intensity={0.5} />
         <directionalLight
           position={[50, 100, 50]}
@@ -545,15 +684,20 @@ export default function DroneScene3D({
           castShadow
         />
         <directionalLight position={[-30, 50, -30]} intensity={0.3} />
-        <hemisphereLight args={['#87CEEB', '#3d5c3d', 0.3]} />
+        <hemisphereLight args={['#87CEEB', '#4a6741', 0.3]} />
 
-        {/* Fog for atmosphere - adjusted for larger view */}
-        <fog attach="fog" args={['#1a1a2e', 80, 200]} />
+        {/* Fog for atmosphere */}
+        <fog attach="fog" args={['#1a1a2e', 60, 180]} />
 
         {/* Scene elements */}
         <Ground />
         <Geofence />
-        <CampusBuildings currentAlert={alert} />
+        <CampusBuildings buildings={buildings} currentAlert={alert} />
+
+        {/* Sentry Towers */}
+        {sentryTowers.map(tower => (
+          <SentryTowerMesh key={tower.id} tower={tower} />
+        ))}
 
         {/* Drones */}
         {drones.map(drone => (
@@ -570,14 +714,14 @@ export default function DroneScene3D({
         ))}
 
         {/* Alert */}
-        {alert && <AlertMarker alert={alert} />}
+        {alert && <AlertMarker alert={alert} buildings={buildings} />}
 
         {/* Camera controls */}
         <OrbitControls
-          maxPolarAngle={Math.PI / 2.1}
-          minPolarAngle={Math.PI / 8}
-          minDistance={20}
-          maxDistance={100}
+          maxPolarAngle={Math.PI / 2.2}
+          minPolarAngle={Math.PI / 6}
+          minDistance={15}
+          maxDistance={150}
           enablePan={true}
           panSpeed={0.5}
           rotateSpeed={0.5}
