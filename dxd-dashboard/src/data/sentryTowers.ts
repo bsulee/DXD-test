@@ -7,20 +7,21 @@ export interface SentryTower {
   type: 'standard' | 'elevated' | 'mobile';
 }
 
-// Strategic tower placements - positioned near alert locations for detection
+// Strategic tower placements - positioned inside campus perimeter
+// Campus bounds: Lat 33.414-33.426, Lng -111.940 to -111.927
 export const initialSentryTowers: SentryTower[] = [
   {
     id: 'ST-001',
     name: 'Engineering Watch',
-    position: { lat: 33.4220, lng: -111.9295 },  // Near Engineering East alert
+    position: { lat: 33.4215, lng: -111.9290 },  // Near Fulton/Engineering
     detectionRadius: 100,
     status: 'active',
     type: 'elevated',
   },
   {
     id: 'ST-002',
-    name: 'Stadium North',
-    position: { lat: 33.4280, lng: -111.9340 },  // Near North Perimeter
+    name: 'Stadium Tower',
+    position: { lat: 33.4250, lng: -111.9340 },  // Near Sun Devil Stadium
     detectionRadius: 120,
     status: 'active',
     type: 'elevated',
@@ -28,7 +29,7 @@ export const initialSentryTowers: SentryTower[] = [
   {
     id: 'ST-003',
     name: 'Gammage Tower',
-    position: { lat: 33.4150, lng: -111.9390 },  // Near Gammage alert
+    position: { lat: 33.4155, lng: -111.9385 },  // Near Gammage Auditorium
     detectionRadius: 80,
     status: 'active',
     type: 'standard',
@@ -36,23 +37,23 @@ export const initialSentryTowers: SentryTower[] = [
   {
     id: 'ST-004',
     name: 'Central Campus',
-    position: { lat: 33.4165, lng: -111.9320 },  // Near Manzanita/Old Main
+    position: { lat: 33.4180, lng: -111.9340 },  // Near Hayden Library
     detectionRadius: 90,
     status: 'active',
     type: 'standard',
   },
   {
     id: 'ST-005',
-    name: 'West Gate',
-    position: { lat: 33.4195, lng: -111.9440 },  // Near West Boundary
+    name: 'Science Complex',
+    position: { lat: 33.4190, lng: -111.9380 },  // Near Biodesign/Life Sciences
     detectionRadius: 100,
     status: 'active',
     type: 'elevated',
   },
   {
     id: 'ST-006',
-    name: 'South Entry',
-    position: { lat: 33.4130, lng: -111.9350 },  // Near South Entry
+    name: 'Residential South',
+    position: { lat: 33.4148, lng: -111.9320 },  // Near Barrett/Hassayampa
     detectionRadius: 90,
     status: 'active',
     type: 'standard',

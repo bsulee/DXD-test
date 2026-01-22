@@ -42,6 +42,7 @@ function App() {
   const [sentryTowers, setSentryTowers] = useState<SentryTower[]>(initialSentryTowers);
 
   // Drone patrol configurations - 2 patrolling, 2 idle (landed on buildings)
+  // Patrol areas spread across campus: North (Stadium) and South (Gammage)
   const droneConfigs: Record<string, {
     mode: 'patrol' | 'idle';
     centerLat?: number;
@@ -54,31 +55,33 @@ function App() {
   }> = {
     'DXD-001': {
       mode: 'patrol',
-      centerLat: 33.4265,
-      centerLng: -111.9325,
-      radius: 0.0012,
-      speed: 0.1,
+      // North patrol - Stadium/Athletic district
+      centerLat: 33.4252,
+      centerLng: -111.9330,
+      radius: 0.0015,
+      speed: 0.08,
       offset: 0,
     },
     'DXD-002': {
       mode: 'idle',
-      // Landing pad: Hayden Library rooftop
-      lat: 33.4197,
-      lng: -111.9342,
+      // Landing pad: Fulton Center rooftop
+      lat: 33.4215,
+      lng: -111.9285,
     },
     'DXD-003': {
       mode: 'patrol',
-      centerLat: 33.4188,
-      centerLng: -111.9345,
-      radius: 0.001,
-      speed: 0.08,
+      // South patrol - Gammage/Arts district
+      centerLat: 33.4155,
+      centerLng: -111.9380,
+      radius: 0.0012,
+      speed: 0.1,
       offset: Math.PI,
     },
     'DXD-004': {
       mode: 'idle',
       // Landing pad: Memorial Union rooftop
       lat: 33.4178,
-      lng: -111.9362,
+      lng: -111.9361,
     },
   };
 
