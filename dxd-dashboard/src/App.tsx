@@ -36,7 +36,7 @@ function App() {
   const [responseTimeFlash, setResponseTimeFlash] = useState(false);
   const dispatchStartTime = useRef<number | null>(null);
 
-  // Drone patrol configurations - 2 patrolling, 2 idle
+  // Drone patrol configurations - 2 patrolling, 2 idle (landed on buildings)
   const droneConfigs: Record<string, {
     mode: 'patrol' | 'idle';
     centerLat?: number;
@@ -57,8 +57,9 @@ function App() {
     },
     'DXD-002': {
       mode: 'idle',
-      lat: 33.4260,
-      lng: -111.9410,
+      // Landing pad: Hayden Library rooftop
+      lat: 33.4242,
+      lng: -111.9281,
     },
     'DXD-003': {
       mode: 'patrol',
@@ -70,8 +71,9 @@ function App() {
     },
     'DXD-004': {
       mode: 'idle',
-      lat: 33.4270,
-      lng: -111.9370,
+      // Landing pad: Memorial Union rooftop
+      lat: 33.4218,
+      lng: -111.9346,
     },
   };
 

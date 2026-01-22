@@ -79,13 +79,13 @@ export const initialDrones: Drone[] = [
   {
     id: 'DXD-002',
     name: 'Bravo',
-    lat: 33.4260,
-    lng: -111.9410,
+    lat: 33.4242,
+    lng: -111.9281,
     status: 'idle',
     battery: 95,
     speed: 0,
     heading: 0,
-    sector: 'Standby East',
+    sector: 'Hayden Library',
   },
   {
     id: 'DXD-003',
@@ -101,13 +101,13 @@ export const initialDrones: Drone[] = [
   {
     id: 'DXD-004',
     name: 'Delta',
-    lat: 33.4270,
-    lng: -111.9370,
+    lat: 33.4218,
+    lng: -111.9346,
     status: 'idle',
     battery: 64,
     speed: 0,
     heading: 0,
-    sector: 'Standby North',
+    sector: 'Memorial Union',
   },
 ];
 
