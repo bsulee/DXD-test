@@ -49,31 +49,31 @@ function App() {
   }> = {
     'DXD-001': {
       mode: 'patrol',
-      centerLat: 33.4242,
-      centerLng: -111.9300,
-      radius: 0.0008,
-      speed: 0.15,
+      centerLat: 33.4265,
+      centerLng: -111.9325,
+      radius: 0.0012,
+      speed: 0.1,
       offset: 0,
     },
     'DXD-002': {
       mode: 'idle',
       // Landing pad: Hayden Library rooftop
-      lat: 33.4242,
-      lng: -111.9281,
+      lat: 33.4197,
+      lng: -111.9342,
     },
     'DXD-003': {
       mode: 'patrol',
-      centerLat: 33.4260,
-      centerLng: -111.9380,
-      radius: 0.0006,
-      speed: 0.12,
+      centerLat: 33.4188,
+      centerLng: -111.9345,
+      radius: 0.001,
+      speed: 0.08,
       offset: Math.PI,
     },
     'DXD-004': {
       mode: 'idle',
       // Landing pad: Memorial Union rooftop
-      lat: 33.4218,
-      lng: -111.9346,
+      lat: 33.4178,
+      lng: -111.9362,
     },
   };
 

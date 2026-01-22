@@ -13,18 +13,18 @@ interface DroneScene3DProps {
   onDispatch: (droneId: string) => void;
 }
 
-// Landing pads for idle drones (on top of buildings)
+// Landing pads for idle drones (on top of buildings) - updated to new campus positions
 const landingPads: Record<string, { lat: number; lng: number; buildingHeight: number; buildingName: string }> = {
   'DXD-002': {
-    lat: 33.4242,      // Hayden Library position
-    lng: -111.9281,
-    buildingHeight: 6,
+    lat: 33.4197,      // Hayden Library position
+    lng: -111.9342,
+    buildingHeight: 8,
     buildingName: 'Hayden Library',
   },
   'DXD-004': {
-    lat: 33.4218,      // Memorial Union position
-    lng: -111.9346,
-    buildingHeight: 5,
+    lat: 33.4178,      // Memorial Union position
+    lng: -111.9362,
+    buildingHeight: 6,
     buildingName: 'Memorial Union',
   },
 };
@@ -207,17 +207,32 @@ function DroneMarker({
   );
 }
 
-// Alert marker (pulsing red sphere)
+// Alert marker with light beam that goes above buildings
 function AlertMarker({ alert }: { alert: Alert }) {
-  const meshRef = useRef<THREE.Mesh>(null);
+  const pulseRef = useRef<THREE.Mesh>(null);
+  const beamRef = useRef<THREE.Mesh>(null);
   const ringRef = useRef<THREE.Mesh>(null);
   const { x, z } = toXZ(alert.lat, alert.lng);
 
+  // Find if alert is near a building to position above it
+  const nearbyBuilding = campusBuildings.find(b => {
+    const dist = Math.sqrt(
+      Math.pow(b.position.lat - alert.lat, 2) +
+      Math.pow(b.position.lng - alert.lng, 2)
+    );
+    return dist < 0.0008;
+  });
+
+  const alertHeight = nearbyBuilding ? nearbyBuilding.height + 5 : 8;
+
   // Pulse animation
   useFrame((state) => {
-    if (meshRef.current) {
+    if (pulseRef.current) {
       const scale = 1 + Math.sin(state.clock.elapsedTime * 4) * 0.3;
-      meshRef.current.scale.set(scale, scale, scale);
+      pulseRef.current.scale.set(scale, scale, scale);
+    }
+    if (beamRef.current) {
+      (beamRef.current.material as THREE.MeshBasicMaterial).opacity = 0.3 + Math.sin(state.clock.elapsedTime * 3) * 0.2;
     }
     if (ringRef.current) {
       const ringScale = 1 + Math.sin(state.clock.elapsedTime * 2) * 0.5;
@@ -227,12 +242,18 @@ function AlertMarker({ alert }: { alert: Alert }) {
 
   return (
     <group position={[x, 0, z]}>
-      {/* Alert sphere */}
-      <mesh ref={meshRef} position={[0, 2, 0]}>
-        <sphereGeometry args={[1.2, 16, 16]} />
+      {/* Vertical light beam from ground to sky */}
+      <mesh ref={beamRef} position={[0, 25, 0]}>
+        <cylinderGeometry args={[0.5, 2, 50, 8]} />
+        <meshBasicMaterial color="#ff0000" transparent opacity={0.4} />
+      </mesh>
+
+      {/* Floating alert sphere above building */}
+      <mesh ref={pulseRef} position={[0, alertHeight, 0]}>
+        <sphereGeometry args={[2, 16, 16]} />
         <meshStandardMaterial
-          color="#dc2626"
-          emissive="#dc2626"
+          color="#ff0000"
+          emissive="#ff0000"
           emissiveIntensity={0.8}
           transparent
           opacity={0.9}
@@ -240,65 +261,48 @@ function AlertMarker({ alert }: { alert: Alert }) {
       </mesh>
 
       {/* Alert light */}
-      <pointLight position={[0, 2, 0]} color="#dc2626" intensity={5} distance={20} />
+      <pointLight position={[0, alertHeight, 0]} color="#ff0000" intensity={8} distance={30} />
 
-      {/* Pulsing ground ring */}
-      <mesh ref={ringRef} position={[0, 0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[3, 4, 32]} />
-        <meshBasicMaterial color="#dc2626" transparent opacity={0.5} />
+      {/* Ground ring */}
+      <mesh position={[0, 0.2, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[3, 5, 32]} />
+        <meshBasicMaterial color="#ff0000" transparent opacity={0.6} />
       </mesh>
 
-      {/* Inner ground circle */}
-      <mesh position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[3, 32]} />
-        <meshBasicMaterial color="#dc2626" transparent opacity={0.2} />
+      {/* Pulsing outer ring */}
+      <mesh ref={ringRef} position={[0, 0.3, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[5, 7, 32]} />
+        <meshBasicMaterial color="#ff0000" transparent opacity={0.3} />
       </mesh>
     </group>
   );
 }
 
-// Ground plane with satellite texture (or fallback color)
+// Ground plane with better contrast
 function Ground() {
-  const textureRef = useRef<THREE.Texture | null>(null);
-  const [textureLoaded, setTextureLoaded] = useState(false);
-
-  useEffect(() => {
-    const loader = new THREE.TextureLoader();
-
-    // Esri World Imagery (free, no API key needed)
-    const satelliteUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/16/25800/12677';
-
-    loader.load(
-      satelliteUrl,
-      (texture) => {
-        texture.wrapS = THREE.ClampToEdgeWrapping;
-        texture.wrapT = THREE.ClampToEdgeWrapping;
-        texture.minFilter = THREE.LinearFilter;
-        textureRef.current = texture;
-        setTextureLoaded(true);
-      },
-      undefined,
-      () => {
-        console.log('Satellite texture failed to load, using fallback');
-      }
-    );
-  }, []);
-
   return (
     <group>
-      {/* Main ground */}
+      {/* Main ground plane - lighter color for contrast */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]} receiveShadow>
-        <planeGeometry args={[200, 200]} />
-        {textureLoaded && textureRef.current ? (
-          <meshStandardMaterial map={textureRef.current} />
-        ) : (
-          <meshStandardMaterial color="#2d4a2d" />
-        )}
+        <planeGeometry args={[300, 300]} />
+        <meshStandardMaterial color="#3d5c3d" />
       </mesh>
-      {/* Only show grid if no texture */}
-      {!textureLoaded && (
-        <gridHelper args={[200, 40, '#3d5a3d', '#3d5a3d']} position={[0, 0.01, 0]} />
-      )}
+
+      {/* Subtle grid for reference */}
+      <gridHelper
+        args={[300, 60, '#4a6b4a', '#4a6b4a']}
+        position={[0, 0.01, 0]}
+      />
+
+      {/* Main roads */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+        <planeGeometry args={[4, 300]} />
+        <meshStandardMaterial color="#555555" />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+        <planeGeometry args={[300, 4]} />
+        <meshStandardMaterial color="#555555" />
+      </mesh>
     </group>
   );
 }
@@ -349,29 +353,56 @@ function Geofence() {
   );
 }
 
-// Building mesh component
-function BuildingMesh({ building }: { building: Building }) {
+// Building mesh component with alert highlighting
+function BuildingMesh({ building, isAlertActive }: { building: Building; isAlertActive: boolean }) {
+  const meshRef = useRef<THREE.Mesh>(null);
   const { x, z } = toXZ(building.position.lat, building.position.lng);
+
+  // Pulse effect when alert is active at this building
+  useFrame((state) => {
+    if (meshRef.current && isAlertActive) {
+      const intensity = 0.5 + Math.sin(state.clock.elapsedTime * 4) * 0.5;
+      (meshRef.current.material as THREE.MeshStandardMaterial).emissiveIntensity = intensity;
+    }
+  });
 
   return (
     <mesh
+      ref={meshRef}
       position={[x, building.height / 2, z]}
       castShadow
       receiveShadow
     >
       <boxGeometry args={[building.width, building.height, building.depth]} />
-      <meshStandardMaterial color={building.color} />
+      <meshStandardMaterial
+        color={isAlertActive ? '#ff4444' : building.color}
+        emissive={isAlertActive ? '#ff0000' : '#000000'}
+        emissiveIntensity={isAlertActive ? 0.5 : 0}
+      />
     </mesh>
   );
 }
 
-// Campus buildings group
-function CampusBuildings() {
+// Campus buildings group with alert checking
+function CampusBuildings({ currentAlert }: { currentAlert: Alert | null }) {
   return (
     <group>
-      {campusBuildings.map(building => (
-        <BuildingMesh key={building.id} building={building} />
-      ))}
+      {campusBuildings.map(building => {
+        // Check if this building has an active alert
+        const isAlertActive = currentAlert &&
+          Math.sqrt(
+            Math.pow(building.position.lat - currentAlert.lat, 2) +
+            Math.pow(building.position.lng - currentAlert.lng, 2)
+          ) < 0.0008;
+
+        return (
+          <BuildingMesh
+            key={building.id}
+            building={building}
+            isAlertActive={!!isAlertActive}
+          />
+        );
+      })}
     </group>
   );
 }
@@ -409,21 +440,26 @@ export default function DroneScene3D({
   return (
     <div className="w-full h-full relative">
       <Canvas
-        camera={{ position: [0, 50, 50], fov: 50 }}
-        style={{ background: '#050a05' }}
+        camera={{ position: [0, 80, 100], fov: 50 }}
+        style={{ background: '#1a1a2e' }}
       >
-        {/* Lighting */}
-        <ambientLight intensity={0.3} />
-        <directionalLight position={[30, 50, 30]} intensity={0.6} />
-        <directionalLight position={[-20, 30, -20]} intensity={0.3} color="#4080ff" />
+        {/* Better lighting */}
+        <ambientLight intensity={0.5} />
+        <directionalLight
+          position={[50, 100, 50]}
+          intensity={1}
+          castShadow
+        />
+        <directionalLight position={[-30, 50, -30]} intensity={0.3} />
+        <hemisphereLight args={['#87CEEB', '#3d5c3d', 0.3]} />
 
-        {/* Fog for atmosphere */}
-        <fog attach="fog" args={['#050a05', 60, 150]} />
+        {/* Fog for atmosphere - adjusted for larger view */}
+        <fog attach="fog" args={['#1a1a2e', 80, 200]} />
 
         {/* Scene elements */}
         <Ground />
         <Geofence />
-        <CampusBuildings />
+        <CampusBuildings currentAlert={alert} />
 
         {/* Drones */}
         {drones.map(drone => (

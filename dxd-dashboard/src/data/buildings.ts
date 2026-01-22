@@ -1,69 +1,322 @@
-// Simple building definitions for ASU campus
-// Each building is just a box with position, size, and color
+// Comprehensive ASU Tempe Campus Buildings
+// Based on actual campus layout
 
 export interface Building {
   id: string;
   name: string;
   position: { lat: number; lng: number };
-  width: number;   // x-axis (east-west)
-  depth: number;   // z-axis (north-south)
-  height: number;  // y-axis (vertical)
+  width: number;
+  depth: number;
+  height: number;
   color: string;
 }
 
+// Color palette for variety
+const COLORS = {
+  brick: '#8B4513',
+  tan: '#D2B48C',
+  sandstone: '#C2B280',
+  gray: '#708090',
+  darkGray: '#4A4A4A',
+  cream: '#FFFDD0',
+  terracotta: '#E2725B',
+  brown: '#964B00',
+};
+
 export const campusBuildings: Building[] = [
+  // === CENTRAL CAMPUS ===
   {
-    id: 'hayden',
+    id: 'hayden-library',
     name: 'Hayden Library',
-    position: { lat: 33.4242, lng: -111.9281 },
-    width: 8,
-    depth: 12,
+    position: { lat: 33.4197, lng: -111.9342 },
+    width: 15,
+    depth: 20,
+    height: 8,
+    color: COLORS.brick,
+  },
+  {
+    id: 'noble-library',
+    name: 'Noble Library',
+    position: { lat: 33.4182, lng: -111.9342 },
+    width: 12,
+    depth: 15,
     height: 6,
-    color: '#8B4513', // Brown
+    color: COLORS.sandstone,
   },
   {
     id: 'old-main',
     name: 'Old Main',
-    position: { lat: 33.4255, lng: -111.9325 },
-    width: 10,
-    depth: 6,
-    height: 8,
-    color: '#CD853F', // Tan
+    position: { lat: 33.4181, lng: -111.9326 },
+    width: 12,
+    depth: 8,
+    height: 10,
+    color: COLORS.brick,
   },
   {
     id: 'memorial-union',
-    name: 'Memorial Union',
-    position: { lat: 33.4218, lng: -111.9346 },
+    name: 'Memorial Union (MU)',
+    position: { lat: 33.4178, lng: -111.9362 },
+    width: 18,
+    depth: 14,
+    height: 6,
+    color: COLORS.tan,
+  },
+  {
+    id: 'student-services',
+    name: 'Student Services',
+    position: { lat: 33.4170, lng: -111.9348 },
     width: 14,
     depth: 10,
     height: 5,
-    color: '#A0522D', // Sienna
+    color: COLORS.cream,
   },
-  {
-    id: 'stadium',
-    name: 'Sun Devil Stadium',
-    position: { lat: 33.4265, lng: -111.9400 },
-    width: 20,
-    depth: 16,
-    height: 10,
-    color: '#4A4A4A', // Dark gray
-  },
-  {
-    id: 'wells-fargo',
-    name: 'Wells Fargo Arena',
-    position: { lat: 33.4250, lng: -111.9420 },
-    width: 12,
-    depth: 12,
-    height: 7,
-    color: '#5A5A5A', // Gray
-  },
+
+  // === WEST CAMPUS ===
   {
     id: 'gammage',
     name: 'Gammage Auditorium',
-    position: { lat: 33.4235, lng: -111.9360 },
+    position: { lat: 33.4140, lng: -111.9405 },
+    width: 16,
+    depth: 16,
+    height: 6,
+    color: COLORS.terracotta,
+  },
+  {
+    id: 'music-building',
+    name: 'Music Building',
+    position: { lat: 33.4155, lng: -111.9395 },
+    width: 12,
+    depth: 18,
+    height: 5,
+    color: COLORS.sandstone,
+  },
+  {
+    id: 'art-museum',
+    name: 'ASU Art Museum',
+    position: { lat: 33.4165, lng: -111.9388 },
+    width: 10,
+    depth: 10,
+    height: 5,
+    color: COLORS.gray,
+  },
+
+  // === ENGINEERING / SCIENCE ===
+  {
+    id: 'engineering-center-a',
+    name: 'Engineering Center A',
+    position: { lat: 33.4212, lng: -111.9315 },
+    width: 14,
+    depth: 12,
+    height: 7,
+    color: COLORS.darkGray,
+  },
+  {
+    id: 'engineering-center-b',
+    name: 'Engineering Center B',
+    position: { lat: 33.4212, lng: -111.9295 },
+    width: 14,
+    depth: 12,
+    height: 7,
+    color: COLORS.darkGray,
+  },
+  {
+    id: 'goldwater-center',
+    name: 'Goldwater Center',
+    position: { lat: 33.4220, lng: -111.9305 },
+    width: 16,
+    depth: 10,
+    height: 6,
+    color: COLORS.tan,
+  },
+  {
+    id: 'physical-sciences',
+    name: 'Physical Sciences',
+    position: { lat: 33.4205, lng: -111.9360 },
+    width: 18,
+    depth: 12,
+    height: 6,
+    color: COLORS.sandstone,
+  },
+  {
+    id: 'life-sciences-a',
+    name: 'Life Sciences A',
+    position: { lat: 33.4195, lng: -111.9375 },
+    width: 12,
+    depth: 14,
+    height: 5,
+    color: COLORS.cream,
+  },
+  {
+    id: 'life-sciences-b',
+    name: 'Life Sciences B',
+    position: { lat: 33.4195, lng: -111.9390 },
+    width: 12,
+    depth: 14,
+    height: 5,
+    color: COLORS.cream,
+  },
+
+  // === ATHLETIC FACILITIES ===
+  {
+    id: 'sun-devil-stadium',
+    name: 'Sun Devil Stadium',
+    position: { lat: 33.4265, lng: -111.9325 },
+    width: 25,
+    depth: 20,
+    height: 12,
+    color: COLORS.darkGray,
+  },
+  {
+    id: 'wells-fargo-arena',
+    name: 'Wells Fargo Arena',
+    position: { lat: 33.4245, lng: -111.9358 },
+    width: 16,
+    depth: 16,
+    height: 8,
+    color: COLORS.gray,
+  },
+  {
+    id: 'sun-devil-fitness',
+    name: 'Sun Devil Fitness',
+    position: { lat: 33.4235, lng: -111.9340 },
+    width: 14,
+    depth: 20,
+    height: 5,
+    color: COLORS.tan,
+  },
+  {
+    id: 'packard-stadium',
+    name: 'Packard Stadium',
+    position: { lat: 33.4255, lng: -111.9295 },
+    width: 14,
+    depth: 14,
+    height: 4,
+    color: COLORS.sandstone,
+  },
+
+  // === NORTH CAMPUS ===
+  {
+    id: 'business-admin',
+    name: 'Business Administration',
+    position: { lat: 33.4225, lng: -111.9365 },
+    width: 16,
+    depth: 12,
+    height: 6,
+    color: COLORS.brick,
+  },
+  {
+    id: 'mccord-hall',
+    name: 'McCord Hall',
+    position: { lat: 33.4232, lng: -111.9380 },
+    width: 14,
+    depth: 10,
+    height: 7,
+    color: COLORS.tan,
+  },
+  {
+    id: 'computing-commons',
+    name: 'Computing Commons',
+    position: { lat: 33.4200, lng: -111.9320 },
     width: 10,
     depth: 10,
     height: 4,
-    color: '#DEB887', // Burlywood
+    color: COLORS.cream,
   },
+
+  // === RESIDENCE HALLS ===
+  {
+    id: 'manzanita-hall',
+    name: 'Manzanita Hall',
+    position: { lat: 33.4160, lng: -111.9310 },
+    width: 20,
+    depth: 8,
+    height: 10,
+    color: COLORS.tan,
+  },
+  {
+    id: 'palo-verde-east',
+    name: 'Palo Verde East',
+    position: { lat: 33.4150, lng: -111.9290 },
+    width: 12,
+    depth: 16,
+    height: 8,
+    color: COLORS.sandstone,
+  },
+  {
+    id: 'palo-verde-west',
+    name: 'Palo Verde West',
+    position: { lat: 33.4150, lng: -111.9320 },
+    width: 12,
+    depth: 16,
+    height: 8,
+    color: COLORS.sandstone,
+  },
+  {
+    id: 'hassayampa',
+    name: 'Hassayampa',
+    position: { lat: 33.4145, lng: -111.9355 },
+    width: 18,
+    depth: 12,
+    height: 6,
+    color: COLORS.cream,
+  },
+
+  // === ADDITIONAL BUILDINGS ===
+  {
+    id: 'social-sciences',
+    name: 'Social Sciences',
+    position: { lat: 33.4188, lng: -111.9310 },
+    width: 14,
+    depth: 10,
+    height: 5,
+    color: COLORS.brick,
+  },
+  {
+    id: 'language-lit',
+    name: 'Language & Literature',
+    position: { lat: 33.4188, lng: -111.9380 },
+    width: 12,
+    depth: 14,
+    height: 5,
+    color: COLORS.sandstone,
+  },
+  {
+    id: 'discovery-hall',
+    name: 'Discovery Hall',
+    position: { lat: 33.4210, lng: -111.9345 },
+    width: 10,
+    depth: 12,
+    height: 4,
+    color: COLORS.cream,
+  },
+  {
+    id: 'fulton-center',
+    name: 'Fulton Center',
+    position: { lat: 33.4218, lng: -111.9280 },
+    width: 14,
+    depth: 10,
+    height: 6,
+    color: COLORS.gray,
+  },
+  {
+    id: 'brickyard',
+    name: 'Brickyard',
+    position: { lat: 33.4165, lng: -111.9330 },
+    width: 10,
+    depth: 8,
+    height: 4,
+    color: COLORS.terracotta,
+  },
+];
+
+// Updated alert locations to match building positions
+export const alertLocations = [
+  { lat: 33.4197, lng: -111.9342, name: 'Hayden Library', inside: true },
+  { lat: 33.4178, lng: -111.9362, name: 'Memorial Union', inside: true },
+  { lat: 33.4181, lng: -111.9326, name: 'Old Main', inside: true },
+  { lat: 33.4265, lng: -111.9325, name: 'Sun Devil Stadium', inside: true },
+  { lat: 33.4140, lng: -111.9405, name: 'Gammage Auditorium', inside: true },
+  { lat: 33.4212, lng: -111.9315, name: 'Engineering Center', inside: true },
+  { lat: 33.4130, lng: -111.9280, name: 'Rural Road (External)', inside: false },
+  { lat: 33.4280, lng: -111.9400, name: 'North Perimeter', inside: false },
 ];
