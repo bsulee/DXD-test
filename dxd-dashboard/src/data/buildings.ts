@@ -309,14 +309,20 @@ export const campusBuildings: Building[] = [
   },
 ];
 
-// Updated alert locations to match building positions
+// Alert locations - positioned away from drone patrol/idle positions
+// Avoids: DXD-001 (33.4265, -111.9325), DXD-002 idle (33.4197, -111.9342),
+//         DXD-003 (33.4188, -111.9345), DXD-004 idle (33.4178, -111.9362)
 export const alertLocations = [
-  { lat: 33.4197, lng: -111.9342, name: 'Hayden Library', inside: true },
-  { lat: 33.4178, lng: -111.9362, name: 'Memorial Union', inside: true },
+  // Inside geofence - away from drone positions
+  { lat: 33.4215, lng: -111.9290, name: 'Engineering East', inside: true },
+  { lat: 33.4155, lng: -111.9395, name: 'Gammage Auditorium', inside: true },
+  { lat: 33.4160, lng: -111.9310, name: 'Manzanita Hall', inside: true },
+  { lat: 33.4230, lng: -111.9380, name: 'Business Complex', inside: true },
+  { lat: 33.4145, lng: -111.9355, name: 'Hassayampa', inside: true },
   { lat: 33.4181, lng: -111.9326, name: 'Old Main', inside: true },
-  { lat: 33.4265, lng: -111.9325, name: 'Sun Devil Stadium', inside: true },
-  { lat: 33.4140, lng: -111.9405, name: 'Gammage Auditorium', inside: true },
-  { lat: 33.4212, lng: -111.9315, name: 'Engineering Center', inside: true },
-  { lat: 33.4130, lng: -111.9280, name: 'Rural Road (External)', inside: false },
-  { lat: 33.4280, lng: -111.9400, name: 'North Perimeter', inside: false },
+  // Outside geofence (perimeter alerts)
+  { lat: 33.4290, lng: -111.9350, name: 'North Perimeter', inside: false },
+  { lat: 33.4120, lng: -111.9350, name: 'South Entry', inside: false },
+  { lat: 33.4200, lng: -111.9450, name: 'West Boundary', inside: false },
+  { lat: 33.4200, lng: -111.9240, name: 'East Boundary', inside: false },
 ];

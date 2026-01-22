@@ -32,7 +32,7 @@ export default function MetricsBar({ metrics, responseTimeFlash }: MetricsBarPro
         <div className="flex flex-col">
           <span className="text-[10px] lg:text-xs text-gray-500 uppercase tracking-wide">Response</span>
           <span className={`font-bold text-sm lg:text-base transition-colors duration-300 ${responseTimeFlash ? 'text-green-400' : 'text-white'}`}>
-            {metrics.avgResponseTime < 0 ? '--' : `${metrics.avgResponseTime}s`}
+            {metrics.avgResponseTime < 0 ? '--' : `${Math.round(metrics.avgResponseTime)}s`}
           </span>
         </div>
       </div>
