@@ -5,6 +5,8 @@ import ActivityLog from './components/ActivityLog';
 import MetricsBar from './components/MetricsBar';
 import type { Drone, Alert, LogEntry } from './data/mockData';
 import { initialDrones, generateAlert } from './data/mockData';
+import { initialSentryTowers } from './data/sentryTowers';
+import type { SentryTower } from './data/sentryTowers';
 
 interface Metrics {
   activeDrones: number;
@@ -35,6 +37,9 @@ function App() {
   });
   const [responseTimeFlash, setResponseTimeFlash] = useState(false);
   const dispatchStartTime = useRef<number | null>(null);
+
+  // Sentry tower state
+  const [sentryTowers, setSentryTowers] = useState<SentryTower[]>(initialSentryTowers);
 
   // Drone patrol configurations - 2 patrolling, 2 idle (landed on buildings)
   const droneConfigs: Record<string, {
@@ -88,10 +93,36 @@ function App() {
     setLogEntries(prev => [...prev, entry]);
   }, []);
 
+  // Check if alert is within any tower's detection radius
+  const checkTowerDetection = useCallback((alertData: Alert) => {
+    const detectingTower = sentryTowers.find(tower => {
+      const latDiff = (tower.position.lat - alertData.lat) * 111000;
+      const lngDiff = (tower.position.lng - alertData.lng) * 111000 * Math.cos(tower.position.lat * Math.PI / 180);
+      const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
+      return distance <= tower.detectionRadius;
+    });
+
+    if (detectingTower) {
+      // Update tower status to alert
+      setSentryTowers(prev => prev.map(t =>
+        t.id === detectingTower.id
+          ? { ...t, status: 'alert' as const }
+          : t
+      ));
+
+      // Log the detection
+      addLogEntry('alert', `${detectingTower.name} detected threat!`);
+      return detectingTower;
+    }
+
+    return null;
+  }, [sentryTowers, addLogEntry]);
+
   // System online log on mount
   useEffect(() => {
     const activeDrones = initialDrones.filter(d => d.status !== 'idle').length;
-    addLogEntry('system', `System online - ${activeDrones} drones active`);
+    const activeTowers = initialSentryTowers.filter(t => t.status === 'active').length;
+    addLogEntry('system', `System online - ${activeDrones} drones, ${activeTowers} towers active`);
   }, [addLogEntry]);
 
   // Single alert generation - only when no current alert
@@ -105,10 +136,20 @@ function App() {
       setAlertResolved(false);
       addLogEntry('alert', `⚠ ALERT: ${newAlert.type.replace(/_/g, ' ')} - ${newAlert.locationName}`);
       setMetrics(prev => ({ ...prev, alertsToday: prev.alertsToday + 1 }));
+
+      // Check tower detection for the new alert
+      checkTowerDetection(newAlert);
     }, delay);
 
     return () => clearTimeout(timer);
-  }, [alert, alertResolved, addLogEntry]);
+  }, [alert, alertResolved, addLogEntry, checkTowerDetection]);
+
+  // Reset tower status when alert is resolved
+  useEffect(() => {
+    if (!alert) {
+      setSentryTowers(prev => prev.map(t => ({ ...t, status: 'active' as const })));
+    }
+  }, [alert]);
 
   // Patrol logging every 10 seconds
   useEffect(() => {
@@ -361,6 +402,7 @@ function App() {
             drones={drones}
             alert={alert}
             onDispatch={(droneId) => handleDispatch(droneId, false)}
+            sentryTowers={sentryTowers}
           />
         </div>
 
