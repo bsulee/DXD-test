@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import type { Drone, Alert } from '../data/mockData';
 import { geofenceBoundary, statusColors, mapCenter } from '../data/mockData';
 import { useBuildings } from '../hooks/useBuildings';
-import type { OSMBuilding } from '../data/fetchOSMBuildings';
+import type { OSMBuilding, OSMRoad } from '../data/fetchOSMBuildings';
 import type { SentryTower } from '../data/sentryTowers';
 
 interface DroneScene3DProps {
@@ -21,14 +21,14 @@ const SCENE_SCALE = 0.12;
 // Landing pads for idle drones (on top of buildings)
 const landingPads: Record<string, { lat: number; lng: number; buildingHeight: number; buildingName: string }> = {
   'DXD-002': {
-    lat: 33.4197,
-    lng: -111.9342,
-    buildingHeight: 12 * SCENE_SCALE, // Hayden Library
-    buildingName: 'Hayden Library',
+    lat: 33.4215,
+    lng: -111.9285,
+    buildingHeight: 10 * SCENE_SCALE, // Fulton Center
+    buildingName: 'Fulton Center',
   },
   'DXD-004': {
     lat: 33.4178,
-    lng: -111.9362,
+    lng: -111.9361,
     buildingHeight: 10 * SCENE_SCALE, // Memorial Union
     buildingName: 'Memorial Union',
   },
@@ -349,64 +349,75 @@ function AlertMarker({ alert, buildings }: { alert: Alert; buildings: OSMBuildin
   );
 }
 
-// Realistic campus ground with desert landscaping
+// Clean ground - neutral color (fake roads removed, real OSM roads used instead)
 function Ground() {
   return (
     <group>
-      {/* Base ground - desert/tan color like Arizona */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]} receiveShadow>
-        <planeGeometry args={[400, 400]} />
-        <meshStandardMaterial color="#C4A77D" />
+      {/* Simple ground plane - dark gray like satellite view */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.5, 0]} receiveShadow>
+        <planeGeometry args={[600, 600]} />
+        <meshStandardMaterial color="#3D3D3D" />
       </mesh>
 
-      {/* Main roads - University Drive (E-W) */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, -85]}>
-        <planeGeometry args={[350, 8]} />
-        <meshStandardMaterial color="#3a3a3a" />
-      </mesh>
-      {/* Rural Road (N-S) */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[85, 0.02, 0]}>
-        <planeGeometry args={[8, 300]} />
-        <meshStandardMaterial color="#3a3a3a" />
-      </mesh>
-      {/* Mill Avenue (N-S) */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-70, 0.02, 0]}>
-        <planeGeometry args={[8, 300]} />
-        <meshStandardMaterial color="#3a3a3a" />
-      </mesh>
-      {/* Apache Blvd (E-W) */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 85]}>
-        <planeGeometry args={[350, 8]} />
-        <meshStandardMaterial color="#3a3a3a" />
-      </mesh>
+      {/* Very subtle grid for spatial reference only */}
+      <gridHelper
+        args={[600, 150, '#4A4A4A', '#454545']}
+        position={[0, -0.4, 0]}
+      />
+    </group>
+  );
+}
 
-      {/* Campus walkways - lighter concrete color */}
-      {[
-        { x: 0, z: 0, w: 3, h: 180 },      // Main N-S walkway
-        { x: -35, z: 0, w: 2.5, h: 150 },  // Secondary N-S
-        { x: 35, z: 0, w: 2.5, h: 150 },   // Secondary N-S
-        { x: 0, z: -40, w: 150, h: 2.5 },  // Main E-W walkway
-        { x: 0, z: 20, w: 120, h: 2.5 },   // Central E-W
-        { x: 0, z: 50, w: 100, h: 2.5 },   // North E-W
-      ].map((path, i) => (
-        <mesh key={`walk-${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[path.x, 0.01, path.z]}>
-          <planeGeometry args={[path.w, path.h]} />
-          <meshStandardMaterial color="#d4c4a8" />
-        </mesh>
-      ))}
+// OSM Road renderer - draws real roads from OpenStreetMap data
+function RoadSegment({ road }: { road: OSMRoad }) {
+  // Convert road points to 3D path
+  const points = road.points.map(p => {
+    const { x, z } = toXZ(p.lat, p.lng);
+    return new THREE.Vector3(x, 0.1, z);
+  });
 
-      {/* Grassy areas - muted desert lawn green */}
-      {[
-        { x: -20, z: -20, w: 25, h: 25 },  // Central quad
-        { x: 20, z: -20, w: 20, h: 20 },
-        { x: -45, z: 30, w: 18, h: 22 },
-        { x: 45, z: -50, w: 22, h: 18 },
-        { x: 0, z: 60, w: 30, h: 20 },
-      ].map((grass, i) => (
-        <mesh key={`grass-${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[grass.x, 0.005, grass.z]}>
-          <planeGeometry args={[grass.w, grass.h]} />
-          <meshStandardMaterial color="#6B8E5E" />
-        </mesh>
+  if (points.length < 2) return null;
+
+  // Road color based on type
+  const roadColor = road.type === 'primary' ? '#2A2A2A' :
+                    road.type === 'secondary' ? '#2F2F2F' :
+                    road.type === 'tertiary' ? '#333333' :
+                    road.type === 'footway' || road.type === 'path' ? '#4A4A4A' :
+                    '#3A3A3A';
+
+  // Scaled road width
+  const scaledWidth = road.width * SCENE_SCALE;
+
+  return (
+    <group>
+      {/* Road surface using line segments */}
+      {points.slice(0, -1).map((point, i) => {
+        const nextPoint = points[i + 1];
+        const midX = (point.x + nextPoint.x) / 2;
+        const midZ = (point.z + nextPoint.z) / 2;
+        const length = point.distanceTo(nextPoint);
+        const angle = Math.atan2(nextPoint.x - point.x, nextPoint.z - point.z);
+
+        return (
+          <mesh
+            key={i}
+            position={[midX, 0.05, midZ]}
+            rotation={[-Math.PI / 2, 0, angle]}
+          >
+            <planeGeometry args={[scaledWidth, length + 0.1]} />
+            <meshStandardMaterial color={roadColor} roughness={0.9} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
+function OSMRoads({ roads }: { roads: OSMRoad[] }) {
+  return (
+    <group>
+      {roads.map(road => (
+        <RoadSegment key={road.id} road={road} />
       ))}
     </group>
   );
@@ -476,10 +487,11 @@ function OSMBuildingMesh({ building, isAlertActive }: { building: OSMBuilding; i
   const meshRef = useRef<THREE.Mesh>(null);
   const { x, z } = toXZ(building.lat, building.lng);
 
-  // Scale building dimensions
-  const width = building.width * SCENE_SCALE;
-  const depth = building.depth * SCENE_SCALE;
-  const height = building.height * SCENE_SCALE;
+  // Scale building dimensions with slight variation to prevent uniform look
+  const width = Math.max(building.width * SCENE_SCALE, 1);
+  const depth = Math.max(building.depth * SCENE_SCALE, 1);
+  const heightVariation = 1 + (building.id % 10) * 0.02;  // 0-20% variation
+  const height = Math.max(building.height * SCENE_SCALE * heightVariation, 0.5);
 
   // Pulse effect when alert is active at this building
   useFrame((state) => {
@@ -501,6 +513,8 @@ function OSMBuildingMesh({ building, isAlertActive }: { building: OSMBuilding; i
         color={isAlertActive ? '#ff4444' : building.color}
         emissive={isAlertActive ? '#ff0000' : '#000000'}
         emissiveIntensity={isAlertActive ? 0.5 : 0}
+        roughness={0.8}
+        metalness={0.1}
       />
     </mesh>
   );
@@ -646,8 +660,8 @@ export default function DroneScene3D({
   onDispatch,
   sentryTowers
 }: DroneScene3DProps) {
-  // Load buildings from OSM with fallback
-  const { buildings, isLoading, source } = useBuildings();
+  // Load buildings and roads from OSM with fallback
+  const { buildings, roads, isLoading, source } = useBuildings();
 
   // Find nearest available drone to alert
   const findNearestDroneId = (): string | null => {
@@ -684,7 +698,7 @@ export default function DroneScene3D({
 
       {/* Data source indicator */}
       <div className="absolute bottom-4 left-4 bg-black/50 text-white text-xs px-2 py-1 rounded z-10">
-        Buildings: {source} ({buildings.length})
+        {source}: {buildings.length} buildings, {roads.length} roads
       </div>
 
       <Canvas
@@ -707,6 +721,7 @@ export default function DroneScene3D({
 
         {/* Scene elements */}
         <Ground />
+        <OSMRoads roads={roads} />
         <Geofence />
         <CampusBuildings buildings={buildings} currentAlert={alert} />
 

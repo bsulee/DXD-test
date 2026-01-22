@@ -1,4 +1,4 @@
-// OpenStreetMap building data fetcher for ASU campus
+// OpenStreetMap building and road data fetcher for ASU campus
 
 export interface OSMBuilding {
   id: number;
@@ -11,6 +11,19 @@ export interface OSMBuilding {
   color: string;
 }
 
+export interface OSMRoad {
+  id: number;
+  name: string;
+  type: string;
+  points: { lat: number; lng: number }[];
+  width: number;
+}
+
+export interface OSMData {
+  buildings: OSMBuilding[];
+  roads: OSMRoad[];
+}
+
 // ASU Campus bounding box
 const BOUNDS = {
   south: 33.4130,
@@ -19,12 +32,16 @@ const BOUNDS = {
   east: -111.9250,
 };
 
-// Overpass API query for buildings in ASU area
+// Updated Overpass API query for buildings AND roads in ASU area
 const OVERPASS_QUERY = `
-[out:json][timeout:25];
+[out:json][timeout:30];
 (
+  // Buildings
   way["building"](${BOUNDS.south},${BOUNDS.west},${BOUNDS.north},${BOUNDS.east});
   relation["building"](${BOUNDS.south},${BOUNDS.west},${BOUNDS.north},${BOUNDS.east});
+
+  // Major roads
+  way["highway"~"primary|secondary|tertiary|residential|service|footway|path"](${BOUNDS.south},${BOUNDS.west},${BOUNDS.north},${BOUNDS.east});
 );
 out body;
 >;
@@ -82,6 +99,20 @@ function estimateHeight(tags: Record<string, string>): number {
   return 6;
 }
 
+function getRoadWidth(tags: Record<string, string>): number {
+  const type = tags.highway || '';
+  switch (type) {
+    case 'primary': return 14;
+    case 'secondary': return 12;
+    case 'tertiary': return 10;
+    case 'residential': return 8;
+    case 'service': return 6;
+    case 'footway': return 3;
+    case 'path': return 2;
+    default: return 6;
+  }
+}
+
 interface OSMElement {
   type: string;
   id: number;
@@ -91,7 +122,7 @@ interface OSMElement {
   tags?: Record<string, string>;
 }
 
-export async function fetchOSMBuildings(): Promise<OSMBuilding[]> {
+export async function fetchOSMBuildings(): Promise<OSMData> {
   try {
     const response = await fetch('https://overpass-api.de/api/interpreter', {
       method: 'POST',
@@ -115,62 +146,77 @@ export async function fetchOSMBuildings(): Promise<OSMBuilding[]> {
       }
     });
 
-    // Parse ways (buildings)
+    // Parse ways (buildings and roads)
     const buildings: OSMBuilding[] = [];
+    const roads: OSMRoad[] = [];
 
     data.elements.forEach((el: OSMElement) => {
-      if (el.type === 'way' && el.tags?.building && el.nodes) {
+      if (el.type === 'way' && el.nodes) {
         const nodeCoords = el.nodes
           .map((nodeId: number) => nodes[nodeId])
           .filter((n): n is { lat: number; lon: number } => n !== undefined);
 
-        if (nodeCoords.length < 3) return;
+        // Parse buildings
+        if (el.tags?.building && nodeCoords.length >= 3) {
+          // Calculate centroid
+          const centroid = nodeCoords.reduce(
+            (acc, n) => ({
+              lat: acc.lat + n.lat / nodeCoords.length,
+              lon: acc.lon + n.lon / nodeCoords.length,
+            }),
+            { lat: 0, lon: 0 }
+          );
 
-        // Calculate centroid
-        const centroid = nodeCoords.reduce(
-          (acc, n) => ({
-            lat: acc.lat + n.lat / nodeCoords.length,
-            lon: acc.lon + n.lon / nodeCoords.length,
-          }),
-          { lat: 0, lon: 0 }
-        );
+          // Calculate bounding box for width/depth
+          const lats = nodeCoords.map((n) => n.lat);
+          const lons = nodeCoords.map((n) => n.lon);
+          const minLat = Math.min(...lats);
+          const maxLat = Math.max(...lats);
+          const minLon = Math.min(...lons);
+          const maxLon = Math.max(...lons);
 
-        // Calculate bounding box for width/depth
-        const lats = nodeCoords.map((n) => n.lat);
-        const lons = nodeCoords.map((n) => n.lon);
-        const minLat = Math.min(...lats);
-        const maxLat = Math.max(...lats);
-        const minLon = Math.min(...lons);
-        const maxLon = Math.max(...lons);
+          // Convert to approximate meters (rough conversion for Arizona)
+          const latToMeters = 111000; // ~111km per degree latitude
+          const lonToMeters = 111000 * Math.cos(centroid.lat * Math.PI / 180);
 
-        // Convert to approximate meters (rough conversion for Arizona)
-        const latToMeters = 111000; // ~111km per degree latitude
-        const lonToMeters = 111000 * Math.cos(centroid.lat * Math.PI / 180);
+          const width = (maxLon - minLon) * lonToMeters;
+          const depth = (maxLat - minLat) * latToMeters;
 
-        const width = (maxLon - minLon) * lonToMeters;
-        const depth = (maxLat - minLat) * latToMeters;
+          // Skip tiny buildings
+          if (width < 5 || depth < 5) return;
 
-        // Skip tiny buildings
-        if (width < 5 || depth < 5) return;
+          buildings.push({
+            id: el.id,
+            name: el.tags.name || `Building ${el.id}`,
+            lat: centroid.lat,
+            lng: centroid.lon,
+            width: Math.min(width, 100), // Cap at 100m
+            depth: Math.min(depth, 100),
+            height: estimateHeight(el.tags),
+            color: getBuildingColor(el.tags),
+          });
+        }
 
-        buildings.push({
-          id: el.id,
-          name: el.tags.name || `Building ${el.id}`,
-          lat: centroid.lat,
-          lng: centroid.lon,
-          width: Math.min(width, 100), // Cap at 100m
-          depth: Math.min(depth, 100),
-          height: estimateHeight(el.tags),
-          color: getBuildingColor(el.tags),
-        });
+        // Parse roads
+        if (el.tags?.highway && nodeCoords.length >= 2) {
+          const points = nodeCoords.map((n) => ({ lat: n.lat, lng: n.lon }));
+
+          roads.push({
+            id: el.id,
+            name: el.tags.name || 'Unnamed Road',
+            type: el.tags.highway,
+            points,
+            width: getRoadWidth(el.tags),
+          });
+        }
       }
     });
 
-    console.log(`Loaded ${buildings.length} buildings from OSM`);
-    return buildings;
+    console.log(`Loaded ${buildings.length} buildings and ${roads.length} roads from OSM`);
+    return { buildings, roads };
 
   } catch (error) {
-    console.error('Failed to fetch OSM buildings:', error);
-    return [];
+    console.error('Failed to fetch OSM data:', error);
+    return { buildings: [], roads: [] };
   }
 }
