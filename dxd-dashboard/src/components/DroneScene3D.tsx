@@ -254,11 +254,11 @@ const Ground = React.memo(function Ground() {
   );
 });
 
-// Simplified roads - using meshBasicMaterial
+// INSTANCED ROADS - renders all road segments efficiently
 const OSMRoads = React.memo(function OSMRoads({ roads }: { roads: OSMRoad[] }) {
-  // Pre-compute all road segments
-  const roadSegments = useMemo(() => {
-    const segments: { x: number; z: number; length: number; angle: number; width: number; color: string }[] = [];
+  // Group road segments by color for instancing
+  const roadsByColor = useMemo(() => {
+    const groups: Record<string, { x: number; z: number; length: number; angle: number; width: number }[]> = {};
 
     roads.forEach(road => {
       const points = road.points.map(p => toXZ(p.lat, p.lng));
@@ -268,6 +268,8 @@ const OSMRoads = React.memo(function OSMRoads({ roads }: { roads: OSMRoad[] }) {
                         road.type === 'footway' || road.type === 'path' ? '#4A4A4A' :
                         '#3A3A3A';
 
+      if (!groups[roadColor]) groups[roadColor] = [];
+
       for (let i = 0; i < points.length - 1; i++) {
         const point = points[i];
         const nextPoint = points[i + 1];
@@ -275,27 +277,37 @@ const OSMRoads = React.memo(function OSMRoads({ roads }: { roads: OSMRoad[] }) {
         const dz = nextPoint.z - point.z;
         const length = Math.sqrt(dx * dx + dz * dz);
 
-        segments.push({
-          x: (point.x + nextPoint.x) / 2,
-          z: (point.z + nextPoint.z) / 2,
-          length: length + 0.1,
-          angle: Math.atan2(dx, dz),
-          width: scaledWidth,
-          color: roadColor,
-        });
+        if (length > 0.1) {  // Skip tiny segments
+          groups[roadColor].push({
+            x: (point.x + nextPoint.x) / 2,
+            z: (point.z + nextPoint.z) / 2,
+            length: length + 0.1,
+            angle: Math.atan2(dx, dz),
+            width: scaledWidth,
+          });
+        }
       }
     });
 
-    return segments;
+    return groups;
   }, [roads]);
 
   return (
     <group>
-      {roadSegments.map((seg, i) => (
-        <mesh key={i} position={[seg.x, 0.05, seg.z]} rotation={[-Math.PI / 2, 0, seg.angle]}>
-          <planeGeometry args={[seg.width, seg.length]} />
-          <meshBasicMaterial color={seg.color} />
-        </mesh>
+      {Object.entries(roadsByColor).map(([color, segments]) => (
+        <Instances key={color} limit={segments.length}>
+          <planeGeometry args={[1, 1]} />
+          <meshBasicMaterial color={color} />
+
+          {segments.map((seg, i) => (
+            <Instance
+              key={i}
+              position={[seg.x, 0.05, seg.z]}
+              rotation={[-Math.PI / 2, 0, seg.angle]}
+              scale={[seg.width, seg.length, 1]}
+            />
+          ))}
+        </Instances>
       ))}
     </group>
   );
