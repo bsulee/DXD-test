@@ -79,7 +79,7 @@ function useSmoothAltitude(targetAltitude: number, speed: number = 0.08) {
         if (Math.abs(diff) < 0.1) return targetAltitude;
         return current + diff * speed;
       });
-    }, 32); // Reduced from 16ms to 32ms
+    }, 32);
 
     return () => clearInterval(interval);
   }, [targetAltitude, speed]);
@@ -103,7 +103,7 @@ function useSmoothPosition(targetLat: number, targetLng: number, speed: number =
         });
         return { lat: newLat, lng: newLng };
       });
-    }, 32); // Reduced from 16ms to 32ms
+    }, 32);
 
     return () => clearInterval(interval);
   }, [targetLat, targetLng, speed]);
@@ -111,7 +111,7 @@ function useSmoothPosition(targetLat: number, targetLng: number, speed: number =
   return { smoothPos, velocity };
 }
 
-// Drone 3D model - optimized with meshBasicMaterial
+// Drone 3D model - uses meshLambertMaterial for depth
 const DroneMarker = React.memo(function DroneMarker({
   drone,
   isNearest,
@@ -162,21 +162,21 @@ const DroneMarker = React.memo(function DroneMarker({
 
   return (
     <group ref={groupRef} position={[x, currentAltitude, z]}>
-      {/* Drone body - simplified */}
+      {/* Drone body */}
       <mesh onClick={onClick}>
         <cylinderGeometry args={[0.8, 1, 1.5, 6]} />
-        <meshBasicMaterial color={color} />
+        <meshLambertMaterial color={color} />
       </mesh>
 
-      {/* Rotor arms - reduced segments */}
+      {/* Rotor arms */}
       {[[0.9, 0.9], [-0.9, 0.9], [0.9, -0.9], [-0.9, -0.9]].map(([rx, rz], i) => (
         <mesh key={i} position={[rx, 0.2, rz]}>
           <cylinderGeometry args={[0.2, 0.2, 0.1, 6]} />
-          <meshBasicMaterial color="#333" />
+          <meshLambertMaterial color="#333" />
         </mesh>
       ))}
 
-      {/* Rotor blur - visible when flying */}
+      {/* Rotor blur - keep basic for glow effect */}
       {(!isLanded || isTransitioning) && [[0.9, 0.9], [-0.9, 0.9], [0.9, -0.9], [-0.9, -0.9]].map(([rx, rz], i) => (
         <mesh key={`blur-${i}`} position={[rx, 0.25, rz]} rotation={[-Math.PI / 2, 0, 0]}>
           <circleGeometry args={[0.5, 8]} />
@@ -184,7 +184,7 @@ const DroneMarker = React.memo(function DroneMarker({
         </mesh>
       ))}
 
-      {/* Coverage circle on ground */}
+      {/* Coverage circle on ground - keep basic */}
       {!isLanded && (
         <mesh position={[0, -currentAltitude + 0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[0, 4, 16]} />
@@ -192,7 +192,7 @@ const DroneMarker = React.memo(function DroneMarker({
         </mesh>
       )}
 
-      {/* Selection indicator */}
+      {/* Selection indicator - keep basic */}
       {isNearest && (
         <mesh position={[0, -currentAltitude + 0.2, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[1.5, 2, 16]} />
@@ -203,13 +203,13 @@ const DroneMarker = React.memo(function DroneMarker({
       {/* Status indicator */}
       <mesh position={[0, 2, 0]}>
         <sphereGeometry args={[0.3, 6, 6]} />
-        <meshBasicMaterial color={color} />
+        <meshLambertMaterial color={color} />
       </mesh>
     </group>
   );
 });
 
-// Simplified Alert Marker
+// Alert Marker - keep basic materials for glowing effect
 const AlertMarker = React.memo(function AlertMarker({ alert }: { alert: Alert }) {
   const pulseRef = useRef<THREE.Mesh>(null);
   const { x, z } = toXZ(alert.lat, alert.lng);
@@ -223,19 +223,19 @@ const AlertMarker = React.memo(function AlertMarker({ alert }: { alert: Alert })
 
   return (
     <group position={[x, 0, z]}>
-      {/* Simple beam */}
+      {/* Simple beam - keep basic for glow */}
       <mesh position={[0, 25, 0]}>
         <cylinderGeometry args={[0.5, 1, 50, 6]} />
         <meshBasicMaterial color="#ff0000" transparent opacity={0.5} />
       </mesh>
 
-      {/* Floating sphere */}
+      {/* Floating sphere - keep basic for glow */}
       <mesh ref={pulseRef} position={[0, 8, 0]}>
         <sphereGeometry args={[2, 8, 8]} />
         <meshBasicMaterial color="#ff0000" />
       </mesh>
 
-      {/* Ground ring */}
+      {/* Ground ring - keep basic */}
       <mesh position={[0, 0.2, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[3, 5, 16]} />
         <meshBasicMaterial color="#ff0000" transparent opacity={0.5} />
@@ -244,29 +244,29 @@ const AlertMarker = React.memo(function AlertMarker({ alert }: { alert: Alert })
   );
 });
 
-// Simple ground plane
+// Ground plane with Lambert material for depth
 const Ground = React.memo(function Ground() {
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.5, 0]}>
       <planeGeometry args={[600, 600]} />
-      <meshBasicMaterial color="#3D3D3D" />
+      <meshLambertMaterial color="#4A4A4A" />
     </mesh>
   );
 });
 
-// INSTANCED ROADS - renders all road segments efficiently
+// INSTANCED ROADS with Lambert material
 const OSMRoads = React.memo(function OSMRoads({ roads }: { roads: OSMRoad[] }) {
-  // Group road segments by color for instancing
   const roadsByColor = useMemo(() => {
     const groups: Record<string, { x: number; z: number; length: number; angle: number; width: number }[]> = {};
 
     roads.forEach(road => {
       const points = road.points.map(p => toXZ(p.lat, p.lng));
       const scaledWidth = road.width * SCENE_SCALE;
-      const roadColor = road.type === 'primary' ? '#2A2A2A' :
-                        road.type === 'secondary' ? '#2F2F2F' :
-                        road.type === 'footway' || road.type === 'path' ? '#4A4A4A' :
-                        '#3A3A3A';
+      // Darker colors for contrast against ground
+      const roadColor = road.type === 'primary' ? '#1A1A1A' :
+                        road.type === 'secondary' ? '#222222' :
+                        road.type === 'footway' || road.type === 'path' ? '#383838' :
+                        '#2A2A2A';
 
       if (!groups[roadColor]) groups[roadColor] = [];
 
@@ -277,7 +277,7 @@ const OSMRoads = React.memo(function OSMRoads({ roads }: { roads: OSMRoad[] }) {
         const dz = nextPoint.z - point.z;
         const length = Math.sqrt(dx * dx + dz * dz);
 
-        if (length > 0.1) {  // Skip tiny segments
+        if (length > 0.1) {
           groups[roadColor].push({
             x: (point.x + nextPoint.x) / 2,
             z: (point.z + nextPoint.z) / 2,
@@ -297,7 +297,7 @@ const OSMRoads = React.memo(function OSMRoads({ roads }: { roads: OSMRoad[] }) {
       {Object.entries(roadsByColor).map(([color, segments]) => (
         <Instances key={color} limit={segments.length}>
           <planeGeometry args={[1, 1]} />
-          <meshBasicMaterial color={color} />
+          <meshLambertMaterial color={color} />
 
           {segments.map((seg, i) => (
             <Instance
@@ -313,7 +313,7 @@ const OSMRoads = React.memo(function OSMRoads({ roads }: { roads: OSMRoad[] }) {
   );
 });
 
-// Geofence - simplified
+// Geofence - keep basic materials for visibility
 const Geofence = React.memo(function Geofence() {
   const linePoints: [number, number, number][] = useMemo(() => {
     const points = geofenceBoundary.map(([lat, lng]) => {
@@ -353,13 +353,12 @@ const Geofence = React.memo(function Geofence() {
   );
 });
 
-// INSTANCED BUILDINGS - renders all buildings in ~10-15 draw calls instead of 879
+// INSTANCED BUILDINGS with Lambert material for depth
 const InstancedBuildings = React.memo(function InstancedBuildings({
   buildings
 }: {
   buildings: OSMBuilding[];
 }) {
-  // Group buildings by color for efficient instancing
   const buildingsByColor = useMemo(() => {
     const groups: Record<string, OSMBuilding[]> = {};
     buildings.forEach(b => {
@@ -374,7 +373,7 @@ const InstancedBuildings = React.memo(function InstancedBuildings({
       {Object.entries(buildingsByColor).map(([color, colorBuildings]) => (
         <Instances key={color} limit={colorBuildings.length}>
           <boxGeometry />
-          <meshBasicMaterial color={color} />
+          <meshLambertMaterial color={color} />
 
           {colorBuildings.map(building => {
             const { x, z } = toXZ(building.lat, building.lng);
@@ -397,7 +396,7 @@ const InstancedBuildings = React.memo(function InstancedBuildings({
   );
 });
 
-// Simplified Sentry Tower
+// Sentry Tower with Lambert material
 const SentryTowerMesh = React.memo(function SentryTowerMesh({ tower }: { tower: SentryTower }) {
   const cameraHeadRef = useRef<THREE.Group>(null);
   const { x, z } = toXZ(tower.position.lat, tower.position.lng);
@@ -419,26 +418,26 @@ const SentryTowerMesh = React.memo(function SentryTowerMesh({ tower }: { tower: 
       {/* Base */}
       <mesh position={[0, 0.3, 0]}>
         <cylinderGeometry args={[1, 1.2, 0.6, 6]} />
-        <meshBasicMaterial color="#444444" />
+        <meshLambertMaterial color="#444444" />
       </mesh>
 
       {/* Pole */}
       <mesh position={[0, towerHeight / 2, 0]}>
         <cylinderGeometry args={[0.2, 0.3, towerHeight, 6]} />
-        <meshBasicMaterial color="#666666" />
+        <meshLambertMaterial color="#666666" />
       </mesh>
 
       {/* Platform */}
       <mesh position={[0, towerHeight, 0]}>
         <boxGeometry args={[1.2, 0.3, 1.2]} />
-        <meshBasicMaterial color="#333333" />
+        <meshLambertMaterial color="#333333" />
       </mesh>
 
       {/* Camera head */}
       <group ref={cameraHeadRef} position={[0, towerHeight + 0.6, 0]}>
         <mesh position={[0, 0, 0.3]}>
           <boxGeometry args={[0.6, 0.5, 0.9]} />
-          <meshBasicMaterial color="#222222" />
+          <meshLambertMaterial color="#222222" />
         </mesh>
         <mesh position={[0, 0, 0.91]}>
           <circleGeometry args={[0.15, 8]} />
@@ -446,13 +445,13 @@ const SentryTowerMesh = React.memo(function SentryTowerMesh({ tower }: { tower: 
         </mesh>
       </group>
 
-      {/* Status light */}
+      {/* Status light - keep basic for glow */}
       <mesh position={[0, towerHeight + 1.2, 0]}>
         <sphereGeometry args={[0.2, 6, 6]} />
         <meshBasicMaterial color={statusColor} />
       </mesh>
 
-      {/* Detection radius ring */}
+      {/* Detection radius ring - keep basic */}
       <mesh position={[0, 0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[detectionRadiusScaled - 0.3, detectionRadiusScaled, 24]} />
         <meshBasicMaterial color={statusColor} transparent opacity={tower.status === 'alert' ? 0.4 : 0.2} />
@@ -504,8 +503,10 @@ export default function DroneScene3D({
         }}
         performance={{ min: 0.5 }}
       >
-        {/* Minimal lighting - meshBasicMaterial doesn't need complex lighting */}
-        <ambientLight intensity={0.8} />
+        {/* Lighting for Lambert materials - NO shadows */}
+        <ambientLight intensity={0.4} />
+        <directionalLight position={[100, 150, 50]} intensity={0.8} />
+        <directionalLight position={[-50, 50, -50]} intensity={0.2} />
 
         {/* Simplified grid */}
         <gridHelper args={[400, 30, '#3A3A3A', '#3A3A3A']} position={[0, -0.4, 0]} />
